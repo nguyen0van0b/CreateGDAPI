@@ -10,6 +10,7 @@
         private TextBox txtSoLuong;
         private Button btnSend;
         private Button btnSendBlackList;
+        private Button btnReloadData;
         private TextBox txtResult;
         private GroupBox grpFields;
         private CheckedListBox chkFields;
@@ -32,6 +33,7 @@
             txtSoLuong = new TextBox();
             btnSend = new Button();
             btnSendBlackList = new Button();
+            btnReloadData = new Button();
             txtResult = new TextBox();
             grpFields = new GroupBox();
             chkFields = new CheckedListBox();
@@ -96,6 +98,16 @@
             btnSendBlackList.UseVisualStyleBackColor = true;
             btnSendBlackList.Click += btnSendBlackList_Click;
             // 
+            // btnReloadData
+            // 
+            btnReloadData.Location = new Point(20, 300);
+            btnReloadData.Name = "btnReloadData";
+            btnReloadData.Size = new Size(200, 30);
+            btnReloadData.TabIndex = 8;
+            btnReloadData.Text = "🔄 Reload Excel Data";
+            btnReloadData.UseVisualStyleBackColor = true;
+            btnReloadData.Click += btnReloadData_Click;
+            // 
             // txtResult
             // 
             txtResult.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -103,8 +115,8 @@
             txtResult.Multiline = true;
             txtResult.Name = "txtResult";
             txtResult.ScrollBars = ScrollBars.Vertical;
-            txtResult.Size = new Size(400, 270);
-            txtResult.TabIndex = 8;
+            txtResult.Size = new Size(400, 310);
+            txtResult.TabIndex = 9;
             // 
             // grpFields
             // 
@@ -112,8 +124,8 @@
             grpFields.Controls.Add(chkFields);
             grpFields.Location = new Point(660, 20);
             grpFields.Name = "grpFields";
-            grpFields.Size = new Size(300, 300);
-            grpFields.TabIndex = 9;
+            grpFields.Size = new Size(300, 320);
+            grpFields.TabIndex = 10;
             grpFields.TabStop = false;
             grpFields.Text = "Chọn các field gửi đi";
             // 
@@ -123,12 +135,15 @@
             chkFields.FormattingEnabled = true;
             chkFields.Location = new Point(10, 20);
             chkFields.Name = "chkFields";
-            chkFields.Size = new Size(280, 256);
+            chkFields.Size = new Size(280, 274);
             chkFields.TabIndex = 0;
             // 
             // Form2
             // 
-            ClientSize = new Size(980, 350);
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(980, 370);
+            Controls.Add(btnReloadData);
             Controls.Add(grpFields);
             Controls.Add(txtPartnerCode);
             Controls.Add(txtAgencyCode);

@@ -508,11 +508,36 @@ RESPONSE: {response.StatusCode}
             {
                 string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
                 if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
-                string logPath = Path.Combine(logDir, "logs.txt");
+
+                string logPath = Path.Combine(logDir, $"logs_{DateTime.Now:yyyyMMdd}.txt");
                 File.AppendAllText(logPath, text + Environment.NewLine, Encoding.UTF8);
             }
             catch { /* ignore lỗi ghi log để tool không bị crash */ }
         }
+        private void btnReloadData_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+
+                _banks = LoadBankCodes(Path.Combine(basePath, "MasterBanksList.xlsx"));
+                _provinces.Clear();
+                _provincesBlackList.Clear();
+                _wardsByProvinceName.Clear();
+                _countries.Clear();
+
+                LoadProvincesWithBlackList(Path.Combine(basePath, "MasterProvincesList.xlsx"));
+                LoadWardsByProvinceName(Path.Combine(basePath, "MasterWardsList.xlsx"));
+                _countries = LoadListFromExcel(Path.Combine(basePath, "MasterCountriesList.xlsx"), 3);
+
+                AppendResult("[INFO] ✅ Reload dữ liệu Excel thành công.\r\n");
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[ERROR] ❌ Reload thất bại: {ex.Message}\r\n");
+            }
+        }
+
         private void SaveCheckedItemsToFile(string filePath)
         {
             var selected = new List<string>();
