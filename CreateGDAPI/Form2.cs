@@ -1,25 +1,21 @@
-﻿using System;
-using System.Net.Http;
+﻿using ClosedXML.Excel;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Collections.Generic;
-using ClosedXML.Excel;
-using System.Text.Json;
-using System.IO;
-using System.Linq;
 
 namespace CreateGDAPI
 {
-    public class CheckedFieldsConfig
+    public partial class Form2 : Form
     {
-        public List<string> SelectedFields { get; set; } = new();
-    }
-
-    public partial class Form1 : Form
-    {
-        private readonly HttpClientHandler handler;
-        private readonly HttpClient client;
+        private readonly HttpClientHandler? handler;
+        private readonly HttpClient? client;
         private readonly Random rnd = new Random();
         private bool _useBlackListOnly = false;
 
@@ -29,8 +25,6 @@ namespace CreateGDAPI
         private List<string> _countries = new();
         private List<string> _provincesBlackList = new();
         private Dictionary<string, List<string>> _wardsByProvinceName = new();
-
-
         // Nghề nghiệp (occupations)
         private readonly List<string> _occupations = new()
 {
@@ -75,55 +69,12 @@ namespace CreateGDAPI
     "Du lịch", "Mua vé máy bay", "Đóng phí dịch vụ", "Tiền sinh hoạt", "Tiết kiệm"
 };
         string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "checkedFields.json");
-
-        public Form1()
-        {
-            InitializeComponent();
-
-            handler = new HttpClientHandler();
-            handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
-            client = new HttpClient(handler);
-
-            comboServiceType.Items.AddRange(new string[] { "AD", "WD", "CP", "HD" });
-            comboCurrency.Items.AddRange(new string[] { "VND", "USD" });
-            comboServiceType.SelectedIndex = 0;
-            comboCurrency.SelectedIndex = 0;
-
-            string basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
-            _banks = LoadBankCodes(Path.Combine(basePath, "MasterBanksList.xlsx"));
-            LoadProvincesWithBlackList(Path.Combine(basePath, "MasterProvincesList.xlsx"));
-            LoadWardsByProvinceName(Path.Combine(basePath, "MasterWardsList.xlsx"));
-            _countries = LoadListFromExcel(Path.Combine(basePath, "MasterCountriesList.xlsx"), 3);
-
-            // nạp field vào checkedListBox
-            chkFields.Items.AddRange(new string[]
-            {
-                "paymentInfo.exchangeRate","paymentInfo.feeAmount","paymentInfo.feeCurrency",
-                "senderInfo.phoneNumber","senderInfo.documentType","senderInfo.idNumber",
-                "senderInfo.issueDate","senderInfo.issuer","senderInfo.nationality",
-                "senderInfo.gender","senderInfo.doB","senderInfo.address",//"senderInfo.city",
-                "senderInfo.country","senderInfo.transferPurpose","senderInfo.fundSource",
-                "senderInfo.recipientRelationship","senderInfo.content",
-                "receiverInfo.address","receiverInfo.fullName2","receiverInfo.phoneNumber2",
-                "receiverInfo.address2","receiverInfo.idNumber","receiverInfo.issueDate",
-                "receiverInfo.issuer","receiverInfo.nationality","receiverInfo.gender","receiverInfo.doB",
-                "receiverInfo.ethnicity","receiverInfo.occupation","receiverInfo.province","receiverInfo.ward",
-                "receiverInfo.transferPurpose","receiverInfo.senderRelationship",
-                "receiverInfo.accountNumber","receiverInfo.bankCode","receiverInfo.bankBranchCode"
-            });
-
-            // phục hồi checked trước đó
-            RestoreCheckedItemsFromFile(configPath);
-            this.FormClosing += new FormClosingEventHandler(this.Form1_FormClosing);
-
-        }
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
         {
             // lưu lại checked khi thoát chương trình
             SaveCheckedItemsToFile(configPath);
         }
         private bool FieldSelected(string field) => chkFields.CheckedItems.Contains(field);
-
         private List<(string, string)> LoadBankCodes(string filePath)
         {
             var list = new List<(string, string)>();
@@ -195,6 +146,49 @@ namespace CreateGDAPI
             }
         }
 
+        public Form2()
+        {
+            InitializeComponent();
+            if (DesignMode) return;
+            handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
+            client = new HttpClient(handler);
+        }
+        private void Form2_Load(object sender, EventArgs e)
+        {
+            comboServiceType.Items.AddRange(new string[] { "AD", "WD", "CP", "HD" });
+            comboCurrency.Items.AddRange(new string[] { "VND", "USD" });
+            comboServiceType.SelectedIndex = 0;
+            comboCurrency.SelectedIndex = 0;
+
+            string basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+            _banks = LoadBankCodes(Path.Combine(basePath, "MasterBanksList.xlsx"));
+            LoadProvincesWithBlackList(Path.Combine(basePath, "MasterProvincesList.xlsx"));
+            LoadWardsByProvinceName(Path.Combine(basePath, "MasterWardsList.xlsx"));
+            _countries = LoadListFromExcel(Path.Combine(basePath, "MasterCountriesList.xlsx"), 3);
+
+            // nạp field vào checkedListBox
+            chkFields.Items.AddRange(new string[]
+            {
+                "paymentInfo.exchangeRate","paymentInfo.feeAmount","paymentInfo.feeCurrency",
+                "senderInfo.phoneNumber","senderInfo.documentType","senderInfo.idNumber",
+                "senderInfo.issueDate","senderInfo.issuer","senderInfo.nationality",
+                "senderInfo.gender","senderInfo.doB","senderInfo.address",//"senderInfo.city",
+                "senderInfo.country","senderInfo.transferPurpose","senderInfo.fundSource",
+                "senderInfo.recipientRelationship","senderInfo.content",
+                "receiverInfo.address","receiverInfo.fullName2","receiverInfo.phoneNumber2",
+                "receiverInfo.address2","receiverInfo.idNumber","receiverInfo.issueDate",
+                "receiverInfo.issuer","receiverInfo.nationality","receiverInfo.gender","receiverInfo.doB",
+                "receiverInfo.ethnicity","receiverInfo.occupation","receiverInfo.province","receiverInfo.ward",
+                "receiverInfo.transferPurpose","receiverInfo.senderRelationship",
+                "receiverInfo.accountNumber","receiverInfo.bankCode","receiverInfo.bankBranchCode"
+            });
+
+            // phục hồi checked trước đó
+            RestoreCheckedItemsFromFile(configPath);
+            this.FormClosing += new FormClosingEventHandler(this.Form1_FormClosing);
+
+        }
         private async void btnSendBlackList_Click(object sender, EventArgs e)
         {
             _useBlackListOnly = true;
@@ -226,7 +220,6 @@ namespace CreateGDAPI
                 await GuiApi(json, i);
             }
         }
-
         private List<string> LoadListFromExcel(string filePath, int colIndex)
         {
             var list = new List<string>();
@@ -245,12 +238,10 @@ namespace CreateGDAPI
         }
 
         private async void btnSend_Click(object sender, EventArgs e)
-{
-    _useBlackListOnly = false;
-    await SendTransactions();
-}
-
-
+        {
+            _useBlackListOnly = false;
+            await SendTransactions();
+        }
         private string TaoJson(string partnerCode, string agencyCode, string serviceType, string currency)
         {
             //string refNo = "RefNo-" + agencyCode + GenerateRandomNumber(6);

@@ -1,6 +1,6 @@
 ﻿namespace CreateGDAPI
 {
-    partial class Form1
+    partial class Form2
     {
         private System.ComponentModel.IContainer components = null;
         private TextBox txtPartnerCode;
@@ -37,7 +37,6 @@
             chkFields = new CheckedListBox();
             grpFields.SuspendLayout();
             SuspendLayout();
-
             // 
             // txtPartnerCode
             // 
@@ -46,7 +45,6 @@
             txtPartnerCode.PlaceholderText = "Partner Code";
             txtPartnerCode.Size = new Size(200, 23);
             txtPartnerCode.TabIndex = 1;
-
             // 
             // txtAgencyCode
             // 
@@ -55,7 +53,6 @@
             txtAgencyCode.PlaceholderText = "Agency Code";
             txtAgencyCode.Size = new Size(200, 23);
             txtAgencyCode.TabIndex = 2;
-
             // 
             // comboServiceType
             // 
@@ -63,7 +60,6 @@
             comboServiceType.Name = "comboServiceType";
             comboServiceType.Size = new Size(200, 23);
             comboServiceType.TabIndex = 3;
-
             // 
             // comboCurrency
             // 
@@ -71,7 +67,6 @@
             comboCurrency.Name = "comboCurrency";
             comboCurrency.Size = new Size(200, 23);
             comboCurrency.TabIndex = 4;
-
             // 
             // txtSoLuong
             // 
@@ -80,7 +75,6 @@
             txtSoLuong.PlaceholderText = "Số lượng giao dịch";
             txtSoLuong.Size = new Size(200, 23);
             txtSoLuong.TabIndex = 5;
-
             // 
             // btnSend
             // 
@@ -91,7 +85,6 @@
             btnSend.Text = "Gửi API (Tất cả)";
             btnSend.UseVisualStyleBackColor = true;
             btnSend.Click += btnSend_Click;
-
             // 
             // btnSendBlackList
             // 
@@ -102,20 +95,20 @@
             btnSendBlackList.Text = "Gửi API (BlackList)";
             btnSendBlackList.UseVisualStyleBackColor = true;
             btnSendBlackList.Click += btnSendBlackList_Click;
-
             // 
             // txtResult
             // 
+            txtResult.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             txtResult.Location = new Point(250, 20);
             txtResult.Multiline = true;
             txtResult.Name = "txtResult";
             txtResult.ScrollBars = ScrollBars.Vertical;
             txtResult.Size = new Size(400, 270);
             txtResult.TabIndex = 8;
-
             // 
             // grpFields
             // 
+            grpFields.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
             grpFields.Controls.Add(chkFields);
             grpFields.Location = new Point(660, 20);
             grpFields.Name = "grpFields";
@@ -123,7 +116,6 @@
             grpFields.TabIndex = 9;
             grpFields.TabStop = false;
             grpFields.Text = "Chọn các field gửi đi";
-
             // 
             // chkFields
             // 
@@ -133,9 +125,8 @@
             chkFields.Name = "chkFields";
             chkFields.Size = new Size(280, 256);
             chkFields.TabIndex = 0;
-
             // 
-            // Form1
+            // Form2
             // 
             ClientSize = new Size(980, 350);
             Controls.Add(grpFields);
@@ -147,8 +138,9 @@
             Controls.Add(btnSend);
             Controls.Add(btnSendBlackList);
             Controls.Add(txtResult);
-            Name = "Form1";
+            Name = "Form2";
             Text = "API Transfer Tool (.NET 8)";
+            Load += Form2_Load;
             grpFields.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
