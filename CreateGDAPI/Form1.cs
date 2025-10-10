@@ -11,22 +11,70 @@ using System.Linq;
 
 namespace CreateGDAPI
 {
+    public class CheckedFieldsConfig
+    {
+        public List<string> SelectedFields { get; set; } = new();
+    }
+
     public partial class Form1 : Form
     {
         private readonly HttpClientHandler handler;
         private readonly HttpClient client;
         private readonly Random rnd = new Random();
+        private bool _useBlackListOnly = false;
 
         private List<(string Code, string Branch)> _banks = new();
         private List<string> _wards = new();
         private List<string> _provinces = new();
         private List<string> _countries = new();
+        private List<string> _provincesBlackList = new();
+        private Dictionary<string, List<string>> _wardsByProvinceName = new();
 
-        private readonly List<string> _occupations = new() { "Engineer", "Teacher", "Doctor", "Farmer", "Student", "Worker", "Nurse" };
-        private readonly List<string> _relationships = new() { "Friend", "Brother", "Sister", "Colleague", "Parent", "Relative" };
-        private readonly List<string> _purposes = new() { "Gift", "Payment", "Support", "Loan", "Investment" };
-        private readonly List<string> _fundSources = new() { "Salary", "Savings", "Business", "Allowance" };
-        private readonly List<string> _contents = new() { "Thanh toán hóa đơn", "Gửi quà", "Hỗ trợ tài chính", "Mua hàng online" };
+
+        // Nghề nghiệp (occupations)
+        private readonly List<string> _occupations = new()
+{
+    "Engineer", "Teacher", "Doctor", "Farmer", "Student", "Worker", "Nurse",
+    "Police", "Soldier", "Pilot", "Chef", "Driver", "Scientist", "Artist",
+    "Musician", "Actor", "Writer", "Photographer", "Athlete", "Lawyer",
+    "Accountant", "Designer", "Programmer", "Technician", "Mechanic",
+    "Manager", "Consultant", "Entrepreneur", "Barista", "Waiter"
+};
+
+        // Quan hệ (relationships)
+        private readonly List<string> _relationships = new()
+{
+    "Friend", "Brother", "Sister", "Colleague", "Parent", "Relative",
+    "Uncle", "Aunt", "Cousin", "Grandparent", "Neighbor", "Partner",
+    "Boss", "Employee", "Husband", "Wife", "Son", "Daughter", "Classmate", "Mentor"
+};
+
+        // Mục đích (purposes)
+        private readonly List<string> _purposes = new()
+{
+    "Gift", "Payment", "Support", "Loan", "Investment",
+    "Donation", "Charity", "Study", "Travel", "Shopping",
+    "Medical", "Emergency", "Insurance", "Business", "Housing",
+    "Transport", "Entertainment", "Debt", "Saving", "Other"
+};
+
+        // Nguồn tiền (fundSources)
+        private readonly List<string> _fundSources = new()
+{
+    "Salary", "Savings", "Business", "Allowance",
+    "Bonus", "Inheritance", "Pension", "Insurance", "Loan", "Other"
+};
+
+        // Nội dung (contents)
+        private readonly List<string> _contents = new()
+{
+    "Thanh toán hóa đơn", "Gửi quà", "Hỗ trợ tài chính", "Mua hàng online",
+    "Trả nợ", "Đóng học phí", "Đóng viện phí", "Tiền thuê nhà",
+    "Tiền điện", "Tiền nước", "Tiền Internet", "Tiền điện thoại",
+    "Đầu tư cổ phiếu", "Đầu tư bất động sản", "Mua bảo hiểm",
+    "Du lịch", "Mua vé máy bay", "Đóng phí dịch vụ", "Tiền sinh hoạt", "Tiết kiệm"
+};
+        string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "checkedFields.json");
 
         public Form1()
         {
@@ -43,9 +91,9 @@ namespace CreateGDAPI
 
             string basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
             _banks = LoadBankCodes(Path.Combine(basePath, "MasterBanksList.xlsx"));
-            _wards = LoadListFromExcel(Path.Combine(basePath, "MasterWardsList.xlsx"), 1);
-            _provinces = LoadListFromExcel(Path.Combine(basePath, "MasterProvincesList.xlsx"), 1);
-            _countries = LoadListFromExcel(Path.Combine(basePath, "MasterCountriesList.xlsx"), 1);
+            LoadProvincesWithBlackList(Path.Combine(basePath, "MasterProvincesList.xlsx"));
+            LoadWardsByProvinceName(Path.Combine(basePath, "MasterWardsList.xlsx"));
+            _countries = LoadListFromExcel(Path.Combine(basePath, "MasterCountriesList.xlsx"), 3);
 
             // nạp field vào checkedListBox
             chkFields.Items.AddRange(new string[]
@@ -53,7 +101,7 @@ namespace CreateGDAPI
                 "paymentInfo.exchangeRate","paymentInfo.feeAmount","paymentInfo.feeCurrency",
                 "senderInfo.phoneNumber","senderInfo.documentType","senderInfo.idNumber",
                 "senderInfo.issueDate","senderInfo.issuer","senderInfo.nationality",
-                "senderInfo.gender","senderInfo.doB","senderInfo.address","senderInfo.city",
+                "senderInfo.gender","senderInfo.doB","senderInfo.address",//"senderInfo.city",
                 "senderInfo.country","senderInfo.transferPurpose","senderInfo.fundSource",
                 "senderInfo.recipientRelationship","senderInfo.content",
                 "receiverInfo.address","receiverInfo.fullName2","receiverInfo.phoneNumber2",
@@ -64,10 +112,16 @@ namespace CreateGDAPI
                 "receiverInfo.accountNumber","receiverInfo.bankCode","receiverInfo.bankBranchCode"
             });
 
-            for (int i = 0; i < chkFields.Items.Count; i++)
-                chkFields.SetItemChecked(i, true);
-        }
+            // phục hồi checked trước đó
+            RestoreCheckedItemsFromFile(configPath);
+            this.FormClosing += new FormClosingEventHandler(this.Form1_FormClosing);
 
+        }
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // lưu lại checked khi thoát chương trình
+            SaveCheckedItemsToFile(configPath);
+        }
         private bool FieldSelected(string field) => chkFields.CheckedItems.Contains(field);
 
         private List<(string, string)> LoadBankCodes(string filePath)
@@ -91,25 +145,63 @@ namespace CreateGDAPI
             }
             return list;
         }
-
-        private List<string> LoadListFromExcel(string filePath, int colIndex)
+        private void LoadProvincesWithBlackList(string filePath)
         {
-            var list = new List<string>();
             try
             {
                 using var workbook = new XLWorkbook(filePath);
                 var ws = workbook.Worksheet(1);
                 foreach (var row in ws.RowsUsed().Skip(1))
                 {
-                    string val = row.Cell(colIndex).GetString().Trim();
-                    if (!string.IsNullOrEmpty(val)) list.Add(val);
+                    string provinceName = row.Cell(2).GetString().Trim();  // cột 3: Tên tiếng Việt
+                    string isBlack = row.Cell(5).GetString().Trim().ToUpper(); // cột 4: BlackList
+
+                    if (!string.IsNullOrEmpty(provinceName))
+                    {
+                        _provinces.Add(provinceName);
+                        if (isBlack == "1" || isBlack == "TRUE" || isBlack == "YES")
+                            _provincesBlackList.Add(provinceName);
+                    }
                 }
             }
-            catch { }
-            return list;
+            catch (Exception ex)
+            {
+                MessageBox.Show("Không thể load danh sách tỉnh/thành: " + ex.Message);
+            }
+        }
+        private void LoadWardsByProvinceName(string filePath)
+        {
+            try
+            {
+                using var workbook = new XLWorkbook(filePath);
+                var ws = workbook.Worksheet(1);
+                foreach (var row in ws.RowsUsed().Skip(1))
+                {
+                    string wardName = row.Cell(3).GetString().Trim();       // Tên phường tiếng Việt
+                    string provinceName = row.Cell(6).GetString().Trim();   // Tên tỉnh tiếng Việt
+
+                    if (string.IsNullOrEmpty(wardName) || string.IsNullOrEmpty(provinceName))
+                        continue;
+
+                    if (!_wardsByProvinceName.ContainsKey(provinceName))
+                        _wardsByProvinceName[provinceName] = new List<string>();
+
+                    _wardsByProvinceName[provinceName].Add(wardName);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Không thể load danh sách phường/xã: " + ex.Message);
+            }
         }
 
-        private async void btnSend_Click(object sender, EventArgs e)
+        private async void btnSendBlackList_Click(object sender, EventArgs e)
+        {
+            _useBlackListOnly = true;
+            await SendTransactions();
+            _useBlackListOnly = false;
+        }
+        private async Task SendTransactions()
         {
             string partnerCode = txtPartnerCode.Text.Trim();
             string agencyCode = txtAgencyCode.Text.Trim();
@@ -135,9 +227,34 @@ namespace CreateGDAPI
             }
         }
 
+        private List<string> LoadListFromExcel(string filePath, int colIndex)
+        {
+            var list = new List<string>();
+            try
+            {
+                using var workbook = new XLWorkbook(filePath);
+                var ws = workbook.Worksheet(1);
+                foreach (var row in ws.RowsUsed().Skip(1))
+                {
+                    string val = row.Cell(colIndex).GetString().Trim();
+                    if (!string.IsNullOrEmpty(val)) list.Add(val);
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        private async void btnSend_Click(object sender, EventArgs e)
+{
+    _useBlackListOnly = false;
+    await SendTransactions();
+}
+
+
         private string TaoJson(string partnerCode, string agencyCode, string serviceType, string currency)
         {
-            string refNo = "RefNo-" + agencyCode + GenerateRandomNumber(6);
+            //string refNo = "RefNo-" + agencyCode + GenerateRandomNumber(6);
+            string refNo = Guid.NewGuid().ToString();
             string partnerRef = "PartnerRef-" + agencyCode + GenerateRandomNumber(6);
             string pin = "PIN-" + agencyCode + GenerateRandomNumber(6);
 
@@ -150,8 +267,54 @@ namespace CreateGDAPI
             var bank = _banks[rnd.Next(_banks.Count)];
             string bankCode = bank.Code;
             string bankBranch = bank.Branch + rnd.Next(1, 100).ToString("D2");
-            string amount = GenerateRandomNumber(7) + ".00";
+            bankBranch = bankBranch.Replace(" ", "").Trim();
+            if (bankBranch.Length > 8) bankBranch = bankBranch.Substring(0, 8);
+            string amount = GenerateRandomNumber(2) + "000000.00";
+            string fee = GenerateRandomNumber(2) + "0.00";
+            if (currency == "USD")
+            {
+                amount = rnd.Next(10, 100).ToString() + ".00";  // 10–99 USD
+                fee = rnd.Next(1, 10).ToString() + ".00";       // 1–9 USD
+            }
+            else if (currency == "VND")
+            {
+                amount = rnd.Next(10, 100).ToString() + "000000.00"; // 10–99 triệu VND
+                fee = rnd.Next(1, 10).ToString() + "000.00";         // 1–9 ngàn VND
+            }
+            string province = "";
+            var listProvince = _useBlackListOnly ? _provincesBlackList : _provinces;
+            if (listProvince.Count > 0)
+                province = listProvince[rnd.Next(listProvince.Count)];
 
+            // chọn phường theo tỉnh
+            string ward = "";
+            if (!string.IsNullOrEmpty(province) && _wardsByProvinceName.TryGetValue(province, out var wardsList))
+            {
+                if (wardsList.Count > 0)
+                    ward = wardsList[rnd.Next(wardsList.Count)];
+            }
+            else
+            {
+                // fallback nếu không tìm thấy
+                var allWards = _wardsByProvinceName.Values.SelectMany(x => x).ToList();
+                if (allWards.Count > 0)
+                    ward = allWards[rnd.Next(allWards.Count)];
+            }
+            // chọn phường theo tỉnh hiện tại nếu có
+            string wardForAddress = "";
+            if (!string.IsNullOrEmpty(province) && _wardsByProvinceName.TryGetValue(province, out var wardsListForAddr) && wardsListForAddr.Count > 0)
+            {
+                wardForAddress = wardsListForAddr[rnd.Next(wardsListForAddr.Count)];
+            }
+            else
+            {
+                // fallback nếu không có phường cho tỉnh này
+                var allWards = _wardsByProvinceName.Values.SelectMany(x => x).ToList();
+                if (allWards.Count > 0)
+                    wardForAddress = allWards[rnd.Next(allWards.Count)];
+                else
+                    wardForAddress = "Phường ngẫu nhiên";
+            }
             var root = new Dictionary<string, object>
             {
                 ["refNo"] = refNo,
@@ -171,7 +334,7 @@ namespace CreateGDAPI
                 ["disbursementCurrency"] = currency
             };
             if (FieldSelected("paymentInfo.exchangeRate")) paymentInfo["exchangeRate"] = "1.0";
-            if (FieldSelected("paymentInfo.feeAmount")) paymentInfo["feeAmount"] = "100.00";
+            if (FieldSelected("paymentInfo.feeAmount")) paymentInfo["feeAmount"] = fee;
             if (FieldSelected("paymentInfo.feeCurrency")) paymentInfo["feeCurrency"] = currency;
             root["paymentInfo"] = paymentInfo;
 
@@ -189,7 +352,7 @@ namespace CreateGDAPI
             if (FieldSelected("senderInfo.gender")) senderInfo["gender"] = rnd.Next(2) == 0 ? "M" : "F";
             if (FieldSelected("senderInfo.doB")) senderInfo["doB"] = RandomDate(1970, 2000);
             if (FieldSelected("senderInfo.address")) senderInfo["address"] = "ĐC " + _wards[rnd.Next(_wards.Count)];
-            if (FieldSelected("senderInfo.city")) senderInfo["city"] = _provinces[rnd.Next(_provinces.Count)];
+            //if (FieldSelected("senderInfo.city")) senderInfo["city"] = _provinces[rnd.Next(_provinces.Count)];
             if (FieldSelected("senderInfo.country")) senderInfo["country"] = _countries[rnd.Next(_countries.Count)];
             if (FieldSelected("senderInfo.transferPurpose")) senderInfo["transferPurpose"] = _purposes[rnd.Next(_purposes.Count)];
             if (FieldSelected("senderInfo.fundSource")) senderInfo["fundSource"] = _fundSources[rnd.Next(_fundSources.Count)];
@@ -204,10 +367,12 @@ namespace CreateGDAPI
                 ["phoneNumber"] = phone,
                 ["documentType"] = "CCCD" // luôn CCCD
             };
-            if (FieldSelected("receiverInfo.address")) receiverInfo["address"] = "ĐC " + _wards[rnd.Next(_wards.Count)];
+            if (FieldSelected("receiverInfo.address"))
+                receiverInfo["address"] = "ĐC " + wardForAddress;
             if (FieldSelected("receiverInfo.fullName2")) receiverInfo["fullName2"] = GenerateRandomName();
             if (FieldSelected("receiverInfo.phoneNumber2")) receiverInfo["phoneNumber2"] = "09" + GenerateRandomNumber(8);
-            if (FieldSelected("receiverInfo.address2")) receiverInfo["address2"] = "ĐC " + _wards[rnd.Next(_wards.Count)];
+            if (FieldSelected("receiverInfo.address2"))
+                receiverInfo["address2"] = "ĐC " + wardForAddress;
             if (FieldSelected("receiverInfo.idNumber")) receiverInfo["idNumber"] = idNumber;
             if (FieldSelected("receiverInfo.issueDate")) receiverInfo["issueDate"] = RandomDate(2020, 2023);
             if (FieldSelected("receiverInfo.issuer")) receiverInfo["issuer"] = "Gov";
@@ -216,8 +381,8 @@ namespace CreateGDAPI
             if (FieldSelected("receiverInfo.doB")) receiverInfo["doB"] = RandomDate(1985, 2005);
             if (FieldSelected("receiverInfo.ethnicity")) receiverInfo["ethnicity"] = "Kinh";
             if (FieldSelected("receiverInfo.occupation")) receiverInfo["occupation"] = _occupations[rnd.Next(_occupations.Count)];
-            if (FieldSelected("receiverInfo.province")) receiverInfo["province"] = _provinces[rnd.Next(_provinces.Count)];
-            if (FieldSelected("receiverInfo.ward")) receiverInfo["ward"] = _wards[rnd.Next(_wards.Count)];
+            if (FieldSelected("receiverInfo.province")) receiverInfo["province"] = province;
+            if (FieldSelected("receiverInfo.ward")) receiverInfo["ward"] = ward;
             if (FieldSelected("receiverInfo.transferPurpose")) receiverInfo["transferPurpose"] = _purposes[rnd.Next(_purposes.Count)];
             if (FieldSelected("receiverInfo.senderRelationship")) receiverInfo["senderRelationship"] = _relationships[rnd.Next(_relationships.Count)];
             if (FieldSelected("receiverInfo.accountNumber")) receiverInfo["accountNumber"] = accNumber;
@@ -225,7 +390,13 @@ namespace CreateGDAPI
             if (FieldSelected("receiverInfo.bankBranchCode")) receiverInfo["bankBranchCode"] = bankBranch;
             root["receiverInfo"] = receiverInfo;
 
-            return JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true });
+            //return JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(root, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+
         }
 
         private async Task GuiApi(string json, int stt)
@@ -233,27 +404,85 @@ namespace CreateGDAPI
             try
             {
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var start = DateTime.Now;
+
                 HttpResponseMessage response = await client.PostAsync("https://58.186.16.67/api/partner/transfer", content);
                 string result = await response.Content.ReadAsStringAsync();
 
-                string logText = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] #{stt}\r\nREQUEST:\r\n{json}\r\nRESPONSE: {response.StatusCode}\r\n{result}\r\n-------------------\r\n";
+                var elapsed = DateTime.Now - start;
+
+                // Thử parse JSON response để lấy mã phản hồi (responseCode)
+                string responseCode = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(result);
+                    if (doc.RootElement.TryGetProperty("response", out var responseObj) &&
+                        responseObj.TryGetProperty("responseCode", out var codeProp))
+                    {
+                        responseCode = codeProp.GetString();
+                    }
+                }
+                catch
+                {
+                    responseCode = "(parse error)";
+                }
+
+                // Format log rõ ràng và dễ đọc
+                string logText =
+                                $@"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] #{stt}
+⏱️ Duration: {elapsed.TotalMilliseconds:F0} ms
+➡️ ResponseCode: {responseCode}
+REQUEST:
+{json}
+
+RESPONSE: {response.StatusCode}
+{result}
+----------------------------------------------------
+
+";
+
                 AppendResult(logText);
                 WriteLogToFile(logText);
             }
             catch (Exception ex)
             {
-                string logText = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] #{stt} ERROR: {ex.Message}\r\n-------------------\r\n";
+                string logText =
+        $@"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] #{stt} ❌ ERROR: {ex.Message}
+----------------------------------------------------
+
+";
                 AppendResult(logText);
                 WriteLogToFile(logText);
             }
         }
 
+
         private string GenerateRandomName()
         {
-            string[] ho = { "Nguyen", "Tran", "Le", "Pham", "Hoang" };
-            string[] ten = { "An", "Binh", "Cuong", "Dung", "Dong", "Hanh", "Lan", "Mai" };
-            return ho[rnd.Next(ho.Length)] + " " + ten[rnd.Next(ten.Length)];
+            string[] ho = {
+        "Nguyen", "Tran", "Le", "Pham", "Hoang", "Huynh", "Phan", "Vu", "Vo", "Dang",
+        "Bui", "Do", "Ngo", "Duong", "Ly", "Cao", "Chu", "La", "Luong", "Mai",
+        "Trinh", "Tieu", "Hua", "Ton", "Quach", "Truong", "Diep", "Han", "Ngoc", "Dang"
+    };
+
+            string[] lot = {
+        "Van", "Thi", "Huu", "Minh", "Quoc", "Gia", "Thanh", "Duc", "Khanh", "Kim",
+        "Hong", "Anh", "Ngoc", "Bao", "Thuy", "Xuan", "Tan", "Phuoc", "Chau", "Lan"
+    };
+
+            string[] ten = {
+        "An", "Binh", "Cuong", "Dung", "Dong", "Hanh", "Lan", "Mai", "Nam", "Phuc",
+        "Son", "Tuan", "Vuong", "Yen", "Thao", "Trang", "Ly", "Hoa", "Hieu", "Khanh",
+        "Linh", "Nguyet", "Tam", "Vy", "Duy", "Hoang", "Manh", "Quang", "Thien", "Viet"
+    };
+
+            string h = ho[rnd.Next(ho.Length)];
+            string l = lot[rnd.Next(lot.Length)];
+            string t = ten[rnd.Next(ten.Length)];
+
+            return $"{h} {l} {t}";
         }
+
 
         private string GenerateRandomNumber(int length)
         {
@@ -287,6 +516,38 @@ namespace CreateGDAPI
                 File.AppendAllText(logPath, text + Environment.NewLine, Encoding.UTF8);
             }
             catch { /* ignore lỗi ghi log để tool không bị crash */ }
+        }
+        private void SaveCheckedItemsToFile(string filePath)
+        {
+            var selected = new List<string>();
+            foreach (var item in chkFields.CheckedItems)
+            {
+                selected.Add(item.ToString());
+            }
+
+            var config = new CheckedFieldsConfig { SelectedFields = selected };
+
+            string json = System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            File.WriteAllText(filePath, json);
+        }
+        private void RestoreCheckedItemsFromFile(string filePath)
+        {
+            if (!File.Exists(filePath)) return;
+
+            string json = File.ReadAllText(filePath);
+            var config = System.Text.Json.JsonSerializer.Deserialize<CheckedFieldsConfig>(json);
+
+            if (config == null) return;
+
+            for (int i = 0; i < chkFields.Items.Count; i++)
+            {
+                string item = chkFields.Items[i].ToString();
+                chkFields.SetItemChecked(i, config.SelectedFields.Contains(item));
+            }
         }
 
     }
