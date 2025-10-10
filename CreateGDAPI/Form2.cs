@@ -479,7 +479,6 @@ RESPONSE: {response.StatusCode}
             return $"{h} {l} {t}";
         }
 
-
         private string GenerateRandomNumber(int length)
         {
             var sb = new StringBuilder(length);

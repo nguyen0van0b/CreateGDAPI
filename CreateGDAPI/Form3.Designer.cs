@@ -17,376 +17,376 @@
 
         private void InitializeComponent()
         {
-            this.groupBox1 = new System.Windows.Forms.GroupBox();
-            this.comboApiEndpoint = new System.Windows.Forms.ComboBox();
-            this.label5 = new System.Windows.Forms.Label();
-            this.comboServiceType = new System.Windows.Forms.ComboBox();
-            this.label4 = new System.Windows.Forms.Label();
-            this.comboCurrency = new System.Windows.Forms.ComboBox();
-            this.label3 = new System.Windows.Forms.Label();
-            this.txtSoLuong = new System.Windows.Forms.TextBox();
-            this.label2 = new System.Windows.Forms.Label();
-            this.txtAgencyCode = new System.Windows.Forms.TextBox();
-            this.label1 = new System.Windows.Forms.Label();
-            this.txtPartnerCode = new System.Windows.Forms.TextBox();
-            this.lblPartnerCode = new System.Windows.Forms.Label();
-            this.groupBox2 = new System.Windows.Forms.GroupBox();
-            this.btnViewTransactions = new System.Windows.Forms.Button();
-            this.btnClearLogs = new System.Windows.Forms.Button();
-            this.btnReloadData = new System.Windows.Forms.Button();
-            this.btnOpenSettings = new System.Windows.Forms.Button();
-            this.btnOpenReport = new System.Windows.Forms.Button();
-            this.btnSendRequest = new System.Windows.Forms.Button();
-            this.groupBoxAutoPush = new System.Windows.Forms.GroupBox();
-            this.lblAutoPushStatus = new System.Windows.Forms.Label();
-            this.btnStartAutoPush = new System.Windows.Forms.Button();
-            this.numAutoPushInterval = new System.Windows.Forms.NumericUpDown();
-            this.label7 = new System.Windows.Forms.Label();
-            this.txtAutoPushCount = new System.Windows.Forms.TextBox();
-            this.label6 = new System.Windows.Forms.Label();
-            this.groupBox3 = new System.Windows.Forms.GroupBox();
-            this.txtResult = new System.Windows.Forms.TextBox();
-            this.groupBox1.SuspendLayout();
-            this.groupBox2.SuspendLayout();
-            this.groupBoxAutoPush.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numAutoPushInterval)).BeginInit();
-            this.groupBox3.SuspendLayout();
-            this.SuspendLayout();
+            groupBox1 = new GroupBox();
+            comboApiEndpoint = new ComboBox();
+            label5 = new Label();
+            comboServiceType = new ComboBox();
+            label4 = new Label();
+            comboCurrency = new ComboBox();
+            label3 = new Label();
+            txtSoLuong = new TextBox();
+            label2 = new Label();
+            txtAgencyCode = new TextBox();
+            label1 = new Label();
+            txtPartnerCode = new TextBox();
+            lblPartnerCode = new Label();
+            groupBox2 = new GroupBox();
+            btnAutoTest = new Button();
+            btnViewTransactions = new Button();
+            btnClearLogs = new Button();
+            btnReloadData = new Button();
+            btnOpenSettings = new Button();
+            btnOpenReport = new Button();
+            btnSendRequest = new Button();
+            groupBoxAutoPush = new GroupBox();
+            lblAutoPushStatus = new Label();
+            btnStartAutoPush = new Button();
+            numAutoPushInterval = new NumericUpDown();
+            label7 = new Label();
+            txtAutoPushCount = new TextBox();
+            label6 = new Label();
+            groupBox3 = new GroupBox();
+            txtResult = new TextBox();
+            groupBox1.SuspendLayout();
+            groupBox2.SuspendLayout();
+            groupBoxAutoPush.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)numAutoPushInterval).BeginInit();
+            groupBox3.SuspendLayout();
+            SuspendLayout();
             // 
             // groupBox1
             // 
-            this.groupBox1.Controls.Add(this.comboApiEndpoint);
-            this.groupBox1.Controls.Add(this.label5);
-            this.groupBox1.Controls.Add(this.comboServiceType);
-            this.groupBox1.Controls.Add(this.label4);
-            this.groupBox1.Controls.Add(this.comboCurrency);
-            this.groupBox1.Controls.Add(this.label3);
-            this.groupBox1.Controls.Add(this.txtSoLuong);
-            this.groupBox1.Controls.Add(this.label2);
-            this.groupBox1.Controls.Add(this.txtAgencyCode);
-            this.groupBox1.Controls.Add(this.label1);
-            this.groupBox1.Controls.Add(this.txtPartnerCode);
-            this.groupBox1.Controls.Add(this.lblPartnerCode);
-            this.groupBox1.Location = new System.Drawing.Point(12, 12);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(1160, 120);
-            this.groupBox1.TabIndex = 0;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "API Configuration";
+            groupBox1.Controls.Add(comboApiEndpoint);
+            groupBox1.Controls.Add(label5);
+            groupBox1.Controls.Add(comboServiceType);
+            groupBox1.Controls.Add(label4);
+            groupBox1.Controls.Add(comboCurrency);
+            groupBox1.Controls.Add(label3);
+            groupBox1.Controls.Add(txtSoLuong);
+            groupBox1.Controls.Add(label2);
+            groupBox1.Controls.Add(txtAgencyCode);
+            groupBox1.Controls.Add(label1);
+            groupBox1.Controls.Add(txtPartnerCode);
+            groupBox1.Controls.Add(lblPartnerCode);
+            groupBox1.Location = new Point(12, 12);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(1160, 120);
+            groupBox1.TabIndex = 0;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "API Configuration";
             // 
             // comboApiEndpoint
             // 
-            this.comboApiEndpoint.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboApiEndpoint.FormattingEnabled = true;
-            this.comboApiEndpoint.Location = new System.Drawing.Point(120, 25);
-            this.comboApiEndpoint.Name = "comboApiEndpoint";
-            this.comboApiEndpoint.Size = new System.Drawing.Size(200, 23);
-            this.comboApiEndpoint.TabIndex = 11;
+            comboApiEndpoint.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboApiEndpoint.FormattingEnabled = true;
+            comboApiEndpoint.Location = new Point(120, 25);
+            comboApiEndpoint.Name = "comboApiEndpoint";
+            comboApiEndpoint.Size = new Size(200, 23);
+            comboApiEndpoint.TabIndex = 11;
             // 
             // label5
             // 
-            this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(20, 28);
-            this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(82, 15);
-            this.label5.TabIndex = 10;
-            this.label5.Text = "API Endpoint:";
+            label5.AutoSize = true;
+            label5.Location = new Point(20, 28);
+            label5.Name = "label5";
+            label5.Size = new Size(79, 15);
+            label5.TabIndex = 10;
+            label5.Text = "API Endpoint:";
             // 
             // comboServiceType
             // 
-            this.comboServiceType.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboServiceType.FormattingEnabled = true;
-            this.comboServiceType.Location = new System.Drawing.Point(940, 25);
-            this.comboServiceType.Name = "comboServiceType";
-            this.comboServiceType.Size = new System.Drawing.Size(200, 23);
-            this.comboServiceType.TabIndex = 9;
+            comboServiceType.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboServiceType.FormattingEnabled = true;
+            comboServiceType.Location = new Point(940, 25);
+            comboServiceType.Name = "comboServiceType";
+            comboServiceType.Size = new Size(200, 23);
+            comboServiceType.TabIndex = 9;
             // 
             // label4
             // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(850, 28);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(78, 15);
-            this.label4.TabIndex = 8;
-            this.label4.Text = "Service Type:";
+            label4.AutoSize = true;
+            label4.Location = new Point(850, 28);
+            label4.Name = "label4";
+            label4.Size = new Size(75, 15);
+            label4.TabIndex = 8;
+            label4.Text = "Service Type:";
             // 
             // comboCurrency
             // 
-            this.comboCurrency.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboCurrency.FormattingEnabled = true;
-            this.comboCurrency.Location = new System.Drawing.Point(940, 60);
-            this.comboCurrency.Name = "comboCurrency";
-            this.comboCurrency.Size = new System.Drawing.Size(200, 23);
-            this.comboCurrency.TabIndex = 7;
+            comboCurrency.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboCurrency.FormattingEnabled = true;
+            comboCurrency.Location = new Point(940, 60);
+            comboCurrency.Name = "comboCurrency";
+            comboCurrency.Size = new Size(200, 23);
+            comboCurrency.TabIndex = 7;
             // 
             // label3
             // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(850, 63);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(61, 15);
-            this.label3.TabIndex = 6;
-            this.label3.Text = "Currency:";
+            label3.AutoSize = true;
+            label3.Location = new Point(850, 63);
+            label3.Name = "label3";
+            label3.Size = new Size(58, 15);
+            label3.TabIndex = 6;
+            label3.Text = "Currency:";
             // 
             // txtSoLuong
             // 
-            this.txtSoLuong.Location = new System.Drawing.Point(530, 60);
-            this.txtSoLuong.Name = "txtSoLuong";
-            this.txtSoLuong.Size = new System.Drawing.Size(200, 23);
-            this.txtSoLuong.TabIndex = 5;
-            this.txtSoLuong.Text = "1";
+            txtSoLuong.Location = new Point(530, 60);
+            txtSoLuong.Name = "txtSoLuong";
+            txtSoLuong.Size = new Size(200, 23);
+            txtSoLuong.TabIndex = 5;
+            txtSoLuong.Text = "1";
             // 
             // label2
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(440, 63);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(63, 15);
-            this.label2.TabIndex = 4;
-            this.label2.Text = "Số lượng:";
+            label2.AutoSize = true;
+            label2.Location = new Point(440, 63);
+            label2.Name = "label2";
+            label2.Size = new Size(57, 15);
+            label2.TabIndex = 4;
+            label2.Text = "Số lượng:";
             // 
             // txtAgencyCode
             // 
-            this.txtAgencyCode.Location = new System.Drawing.Point(530, 25);
-            this.txtAgencyCode.Name = "txtAgencyCode";
-            this.txtAgencyCode.Size = new System.Drawing.Size(200, 23);
-            this.txtAgencyCode.TabIndex = 3;
+            txtAgencyCode.Location = new Point(530, 25);
+            txtAgencyCode.Name = "txtAgencyCode";
+            txtAgencyCode.Size = new Size(200, 23);
+            txtAgencyCode.TabIndex = 3;
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(440, 28);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(84, 15);
-            this.label1.TabIndex = 2;
-            this.label1.Text = "Agency Code:";
+            label1.AutoSize = true;
+            label1.Location = new Point(440, 28);
+            label1.Name = "label1";
+            label1.Size = new Size(81, 15);
+            label1.TabIndex = 2;
+            label1.Text = "Agency Code:";
             // 
             // txtPartnerCode
             // 
-            this.txtPartnerCode.Location = new System.Drawing.Point(120, 60);
-            this.txtPartnerCode.Name = "txtPartnerCode";
-            this.txtPartnerCode.Size = new System.Drawing.Size(200, 23);
-            this.txtPartnerCode.TabIndex = 1;
+            txtPartnerCode.Location = new Point(120, 60);
+            txtPartnerCode.Name = "txtPartnerCode";
+            txtPartnerCode.Size = new Size(200, 23);
+            txtPartnerCode.TabIndex = 1;
             // 
             // lblPartnerCode
             // 
-            this.lblPartnerCode.AutoSize = true;
-            this.lblPartnerCode.Location = new System.Drawing.Point(20, 63);
-            this.lblPartnerCode.Name = "lblPartnerCode";
-            this.lblPartnerCode.Size = new System.Drawing.Size(82, 15);
-            this.lblPartnerCode.TabIndex = 0;
-            this.lblPartnerCode.Text = "Partner Code:";
+            lblPartnerCode.AutoSize = true;
+            lblPartnerCode.Location = new Point(20, 63);
+            lblPartnerCode.Name = "lblPartnerCode";
+            lblPartnerCode.Size = new Size(79, 15);
+            lblPartnerCode.TabIndex = 0;
+            lblPartnerCode.Text = "Partner Code:";
             // 
             // groupBox2
             // 
-            this.groupBox2.Controls.Add(this.btnViewTransactions);
-            this.groupBox2.Controls.Add(this.btnClearLogs);
-            this.groupBox2.Controls.Add(this.btnReloadData);
-            this.groupBox2.Controls.Add(this.btnOpenSettings);
-            this.groupBox2.Controls.Add(this.btnOpenReport);
-            this.groupBox2.Controls.Add(this.btnSendRequest);
-            this.groupBox2.Location = new System.Drawing.Point(12, 138);
-            this.groupBox2.Name = "groupBox2";
-            this.groupBox2.Size = new System.Drawing.Size(1160, 70);
-            this.groupBox2.TabIndex = 1;
-            this.groupBox2.TabStop = false;
-            this.groupBox2.Text = "Actions";
+            groupBox2.Controls.Add(btnAutoTest);
+            groupBox2.Controls.Add(btnViewTransactions);
+            groupBox2.Controls.Add(btnClearLogs);
+            groupBox2.Controls.Add(btnReloadData);
+            groupBox2.Controls.Add(btnOpenSettings);
+            groupBox2.Controls.Add(btnOpenReport);
+            groupBox2.Controls.Add(btnSendRequest);
+            groupBox2.Location = new Point(12, 138);
+            groupBox2.Name = "groupBox2";
+            groupBox2.Size = new Size(1160, 70);
+            groupBox2.TabIndex = 1;
+            groupBox2.TabStop = false;
+            groupBox2.Text = "Actions";
+            // 
+            // btnAutoTest
+            // 
+            btnAutoTest.Location = new Point(310, 25);
+            btnAutoTest.Name = "btnAutoTest";
+            btnAutoTest.Size = new Size(140, 30);
+            btnAutoTest.TabIndex = 6;
+            btnAutoTest.Text = "🤖 Auto Test";
+            btnAutoTest.UseVisualStyleBackColor = true;
+            btnAutoTest.Click += btnAutoTest_Click;
             // 
             // btnViewTransactions
             // 
-            this.btnViewTransactions.Location = new System.Drawing.Point(920, 25);
-            this.btnViewTransactions.Name = "btnViewTransactions";
-            this.btnViewTransactions.Size = new System.Drawing.Size(220, 30);
-            this.btnViewTransactions.TabIndex = 5;
-            this.btnViewTransactions.Text = "📋 View Transactions";
-            this.btnViewTransactions.UseVisualStyleBackColor = true;
-            this.btnViewTransactions.Click += new System.EventHandler(this.btnViewTransactions_Click);
+            btnViewTransactions.Location = new Point(1013, 25);
+            btnViewTransactions.Name = "btnViewTransactions";
+            btnViewTransactions.Size = new Size(127, 30);
+            btnViewTransactions.TabIndex = 5;
+            btnViewTransactions.Text = "📋 View Transactions";
+            btnViewTransactions.UseVisualStyleBackColor = true;
+            btnViewTransactions.Click += btnViewTransactions_Click;
             // 
             // btnClearLogs
             // 
-            this.btnClearLogs.Location = new System.Drawing.Point(770, 25);
-            this.btnClearLogs.Name = "btnClearLogs";
-            this.btnClearLogs.Size = new System.Drawing.Size(130, 30);
-            this.btnClearLogs.TabIndex = 4;
-            this.btnClearLogs.Text = "🗑️ Clear Logs";
-            this.btnClearLogs.UseVisualStyleBackColor = true;
-            this.btnClearLogs.Click += new System.EventHandler(this.btnClearLogs_Click);
+            btnClearLogs.Location = new Point(917, 25);
+            btnClearLogs.Name = "btnClearLogs";
+            btnClearLogs.Size = new Size(90, 30);
+            btnClearLogs.TabIndex = 4;
+            btnClearLogs.Text = "🗑️ Clear Logs";
+            btnClearLogs.UseVisualStyleBackColor = true;
+            btnClearLogs.Click += btnClearLogs_Click;
             // 
             // btnReloadData
             // 
-            this.btnReloadData.Location = new System.Drawing.Point(620, 25);
-            this.btnReloadData.Name = "btnReloadData";
-            this.btnReloadData.Size = new System.Drawing.Size(140, 30);
-            this.btnReloadData.TabIndex = 3;
-            this.btnReloadData.Text = "🔄 Reload Data";
-            this.btnReloadData.UseVisualStyleBackColor = true;
-            this.btnReloadData.Click += new System.EventHandler(this.btnReloadData_Click);
+            btnReloadData.Location = new Point(770, 25);
+            btnReloadData.Name = "btnReloadData";
+            btnReloadData.Size = new Size(140, 30);
+            btnReloadData.TabIndex = 3;
+            btnReloadData.Text = "🔄 Reload Data";
+            btnReloadData.UseVisualStyleBackColor = true;
+            btnReloadData.Click += btnReloadData_Click;
             // 
             // btnOpenSettings
             // 
-            this.btnOpenSettings.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(255)))));
-            this.btnOpenSettings.Location = new System.Drawing.Point(470, 25);
-            this.btnOpenSettings.Name = "btnOpenSettings";
-            this.btnOpenSettings.Size = new System.Drawing.Size(140, 30);
-            this.btnOpenSettings.TabIndex = 2;
-            this.btnOpenSettings.Text = "⚙️ Settings";
-            this.btnOpenSettings.UseVisualStyleBackColor = false;
-            this.btnOpenSettings.Click += new System.EventHandler(this.btnOpenSettings_Click);
+            btnOpenSettings.BackColor = Color.FromArgb(192, 255, 255);
+            btnOpenSettings.Location = new Point(624, 25);
+            btnOpenSettings.Name = "btnOpenSettings";
+            btnOpenSettings.Size = new Size(140, 30);
+            btnOpenSettings.TabIndex = 2;
+            btnOpenSettings.Text = "⚙️ Settings";
+            btnOpenSettings.UseVisualStyleBackColor = false;
+            btnOpenSettings.Click += btnOpenSettings_Click;
             // 
             // btnOpenReport
             // 
-            this.btnOpenReport.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
-            this.btnOpenReport.Location = new System.Drawing.Point(320, 25);
-            this.btnOpenReport.Name = "btnOpenReport";
-            this.btnOpenReport.Size = new System.Drawing.Size(140, 30);
-            this.btnOpenReport.TabIndex = 1;
-            this.btnOpenReport.Text = "📊 Report";
-            this.btnOpenReport.UseVisualStyleBackColor = false;
-            this.btnOpenReport.Click += new System.EventHandler(this.btnOpenReport_Click);
+            btnOpenReport.BackColor = Color.FromArgb(255, 224, 192);
+            btnOpenReport.Location = new Point(468, 25);
+            btnOpenReport.Name = "btnOpenReport";
+            btnOpenReport.Size = new Size(140, 30);
+            btnOpenReport.TabIndex = 1;
+            btnOpenReport.Text = "📊 Report";
+            btnOpenReport.UseVisualStyleBackColor = false;
+            btnOpenReport.Click += btnOpenReport_Click;
             // 
             // btnSendRequest
             // 
-            this.btnSendRequest.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(192)))), ((int)(((byte)(0)))));
-            this.btnSendRequest.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
-            this.btnSendRequest.ForeColor = System.Drawing.Color.White;
-            this.btnSendRequest.Location = new System.Drawing.Point(20, 25);
-            this.btnSendRequest.Name = "btnSendRequest";
-            this.btnSendRequest.Size = new System.Drawing.Size(280, 30);
-            this.btnSendRequest.TabIndex = 0;
-            this.btnSendRequest.Text = "🚀 Send API Request";
-            this.btnSendRequest.UseVisualStyleBackColor = false;
-            this.btnSendRequest.Click += new System.EventHandler(this.btnSendRequest_Click);
+            btnSendRequest.BackColor = Color.FromArgb(0, 192, 0);
+            btnSendRequest.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            btnSendRequest.ForeColor = Color.White;
+            btnSendRequest.Location = new Point(20, 25);
+            btnSendRequest.Name = "btnSendRequest";
+            btnSendRequest.Size = new Size(280, 30);
+            btnSendRequest.TabIndex = 0;
+            btnSendRequest.Text = "🚀 Send API Request";
+            btnSendRequest.UseVisualStyleBackColor = false;
+            btnSendRequest.Click += btnSendRequest_Click;
             // 
             // groupBoxAutoPush
             // 
-            this.groupBoxAutoPush.Controls.Add(this.lblAutoPushStatus);
-            this.groupBoxAutoPush.Controls.Add(this.btnStartAutoPush);
-            this.groupBoxAutoPush.Controls.Add(this.numAutoPushInterval);
-            this.groupBoxAutoPush.Controls.Add(this.label7);
-            this.groupBoxAutoPush.Controls.Add(this.txtAutoPushCount);
-            this.groupBoxAutoPush.Controls.Add(this.label6);
-            this.groupBoxAutoPush.Location = new System.Drawing.Point(12, 214);
-            this.groupBoxAutoPush.Name = "groupBoxAutoPush";
-            this.groupBoxAutoPush.Size = new System.Drawing.Size(1160, 80);
-            this.groupBoxAutoPush.TabIndex = 3;
-            this.groupBoxAutoPush.TabStop = false;
-            this.groupBoxAutoPush.Text = "🤖 Auto Push Configuration";
+            groupBoxAutoPush.Controls.Add(lblAutoPushStatus);
+            groupBoxAutoPush.Controls.Add(btnStartAutoPush);
+            groupBoxAutoPush.Controls.Add(numAutoPushInterval);
+            groupBoxAutoPush.Controls.Add(label7);
+            groupBoxAutoPush.Controls.Add(txtAutoPushCount);
+            groupBoxAutoPush.Controls.Add(label6);
+            groupBoxAutoPush.Location = new Point(12, 214);
+            groupBoxAutoPush.Name = "groupBoxAutoPush";
+            groupBoxAutoPush.Size = new Size(1160, 80);
+            groupBoxAutoPush.TabIndex = 3;
+            groupBoxAutoPush.TabStop = false;
+            groupBoxAutoPush.Text = "🤖 Auto Push Configuration";
             // 
             // lblAutoPushStatus
             // 
-            this.lblAutoPushStatus.AutoSize = true;
-            this.lblAutoPushStatus.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
-            this.lblAutoPushStatus.Location = new System.Drawing.Point(770, 35);
-            this.lblAutoPushStatus.Name = "lblAutoPushStatus";
-            this.lblAutoPushStatus.Size = new System.Drawing.Size(95, 15);
-            this.lblAutoPushStatus.TabIndex = 5;
-            this.lblAutoPushStatus.Text = "⏸️ Not Running";
+            lblAutoPushStatus.AutoSize = true;
+            lblAutoPushStatus.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            lblAutoPushStatus.Location = new Point(770, 35);
+            lblAutoPushStatus.Name = "lblAutoPushStatus";
+            lblAutoPushStatus.Size = new Size(93, 15);
+            lblAutoPushStatus.TabIndex = 5;
+            lblAutoPushStatus.Text = "⏸️ Not Running";
             // 
             // btnStartAutoPush
             // 
-            this.btnStartAutoPush.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(128)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
-            this.btnStartAutoPush.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
-            this.btnStartAutoPush.Location = new System.Drawing.Point(540, 25);
-            this.btnStartAutoPush.Name = "btnStartAutoPush";
-            this.btnStartAutoPush.Size = new System.Drawing.Size(200, 35);
-            this.btnStartAutoPush.TabIndex = 4;
-            this.btnStartAutoPush.Text = "▶️ Start Auto Push";
-            this.btnStartAutoPush.UseVisualStyleBackColor = false;
-            this.btnStartAutoPush.Click += new System.EventHandler(this.btnStartAutoPush_Click);
+            btnStartAutoPush.BackColor = Color.FromArgb(128, 255, 192);
+            btnStartAutoPush.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            btnStartAutoPush.Location = new Point(540, 25);
+            btnStartAutoPush.Name = "btnStartAutoPush";
+            btnStartAutoPush.Size = new Size(200, 35);
+            btnStartAutoPush.TabIndex = 4;
+            btnStartAutoPush.Text = "▶️ Start Auto Push";
+            btnStartAutoPush.UseVisualStyleBackColor = false;
+            btnStartAutoPush.Click += btnStartAutoPush_Click;
             // 
             // numAutoPushInterval
             // 
-            this.numAutoPushInterval.Location = new System.Drawing.Point(420, 32);
-            this.numAutoPushInterval.Maximum = new decimal(new int[] {
-            3600,
-            0,
-            0,
-            0});
-            this.numAutoPushInterval.Minimum = new decimal(new int[] {
-            1,
-            0,
-            0,
-            0});
-            this.numAutoPushInterval.Name = "numAutoPushInterval";
-            this.numAutoPushInterval.Size = new System.Drawing.Size(100, 23);
-            this.numAutoPushInterval.TabIndex = 3;
-            this.numAutoPushInterval.Value = new decimal(new int[] {
-            5,
-            0,
-            0,
-            0});
+            numAutoPushInterval.Location = new Point(420, 32);
+            numAutoPushInterval.Maximum = new decimal(new int[] { 3600, 0, 0, 0 });
+            numAutoPushInterval.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            numAutoPushInterval.Name = "numAutoPushInterval";
+            numAutoPushInterval.Size = new Size(100, 23);
+            numAutoPushInterval.TabIndex = 3;
+            numAutoPushInterval.Value = new decimal(new int[] { 5, 0, 0, 0 });
             // 
             // label7
             // 
-            this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(280, 35);
-            this.label7.Name = "label7";
-            this.label7.Size = new System.Drawing.Size(134, 15);
-            this.label7.TabIndex = 2;
-            this.label7.Text = "Interval (seconds/req):";
+            label7.AutoSize = true;
+            label7.Location = new Point(280, 35);
+            label7.Name = "label7";
+            label7.Size = new Size(125, 15);
+            label7.TabIndex = 2;
+            label7.Text = "Interval (seconds/req):";
             // 
             // txtAutoPushCount
             // 
-            this.txtAutoPushCount.Location = new System.Drawing.Point(150, 32);
-            this.txtAutoPushCount.Name = "txtAutoPushCount";
-            this.txtAutoPushCount.Size = new System.Drawing.Size(100, 23);
-            this.txtAutoPushCount.TabIndex = 1;
-            this.txtAutoPushCount.Text = "10";
+            txtAutoPushCount.Location = new Point(150, 32);
+            txtAutoPushCount.Name = "txtAutoPushCount";
+            txtAutoPushCount.Size = new Size(100, 23);
+            txtAutoPushCount.TabIndex = 1;
+            txtAutoPushCount.Text = "10";
             // 
             // label6
             // 
-            this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(20, 35);
-            this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(124, 15);
-            this.label6.TabIndex = 0;
-            this.label6.Text = "Total Requests to Send:";
+            label6.AutoSize = true;
+            label6.Location = new Point(20, 35);
+            label6.Name = "label6";
+            label6.Size = new Size(129, 15);
+            label6.TabIndex = 0;
+            label6.Text = "Total Requests to Send:";
             // 
             // groupBox3
             // 
-            this.groupBox3.Controls.Add(this.txtResult);
-            this.groupBox3.Location = new System.Drawing.Point(12, 300);
-            this.groupBox3.Name = "groupBox3";
-            this.groupBox3.Size = new System.Drawing.Size(1160, 400);
-            this.groupBox3.TabIndex = 2;
-            this.groupBox3.TabStop = false;
-            this.groupBox3.Text = "Response Logs";
+            groupBox3.Controls.Add(txtResult);
+            groupBox3.Location = new Point(12, 300);
+            groupBox3.Name = "groupBox3";
+            groupBox3.Size = new Size(1160, 400);
+            groupBox3.TabIndex = 2;
+            groupBox3.TabStop = false;
+            groupBox3.Text = "Response Logs";
             // 
             // txtResult
             // 
-            this.txtResult.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
-            this.txtResult.Font = new System.Drawing.Font("Consolas", 9.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.txtResult.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(220)))), ((int)(((byte)(220)))));
-            this.txtResult.Location = new System.Drawing.Point(6, 22);
-            this.txtResult.Multiline = true;
-            this.txtResult.Name = "txtResult";
-            this.txtResult.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.txtResult.Size = new System.Drawing.Size(1148, 372);
-            this.txtResult.TabIndex = 0;
-            this.txtResult.WordWrap = false;
+            txtResult.BackColor = Color.FromArgb(30, 30, 30);
+            txtResult.Font = new Font("Consolas", 9.5F);
+            txtResult.ForeColor = Color.FromArgb(220, 220, 220);
+            txtResult.Location = new Point(6, 22);
+            txtResult.Multiline = true;
+            txtResult.Name = "txtResult";
+            txtResult.ScrollBars = ScrollBars.Both;
+            txtResult.Size = new Size(1148, 372);
+            txtResult.TabIndex = 0;
+            txtResult.WordWrap = false;
             // 
             // Form3
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1184, 712);
-            this.Controls.Add(this.groupBoxAutoPush);
-            this.Controls.Add(this.groupBox3);
-            this.Controls.Add(this.groupBox2);
-            this.Controls.Add(this.groupBox1);
-            this.Name = "Form3";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "API Testing Tool - All Endpoints";
-            this.Load += new System.EventHandler(this.Form3_Load);
-            this.groupBox1.ResumeLayout(false);
-            this.groupBox1.PerformLayout();
-            this.groupBox2.ResumeLayout(false);
-            this.groupBoxAutoPush.ResumeLayout(false);
-            this.groupBoxAutoPush.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numAutoPushInterval)).EndInit();
-            this.groupBox3.ResumeLayout(false);
-            this.groupBox3.PerformLayout();
-            this.ResumeLayout(false);
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(1184, 712);
+            Controls.Add(groupBoxAutoPush);
+            Controls.Add(groupBox3);
+            Controls.Add(groupBox2);
+            Controls.Add(groupBox1);
+            Name = "Form3";
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "API Testing Tool - All Endpoints";
+            Load += Form3_Load;
+            groupBox1.ResumeLayout(false);
+            groupBox1.PerformLayout();
+            groupBox2.ResumeLayout(false);
+            groupBoxAutoPush.ResumeLayout(false);
+            groupBoxAutoPush.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)numAutoPushInterval).EndInit();
+            groupBox3.ResumeLayout(false);
+            groupBox3.PerformLayout();
+            ResumeLayout(false);
         }
 
         #endregion
@@ -411,6 +411,7 @@
         private System.Windows.Forms.Button btnSendRequest;
         private System.Windows.Forms.Button btnOpenSettings;
         private System.Windows.Forms.Button btnOpenReport;
+        private System.Windows.Forms.Button btnAutoTest;
         private System.Windows.Forms.GroupBox groupBoxAutoPush;
         private System.Windows.Forms.Label lblAutoPushStatus;
         private System.Windows.Forms.Button btnStartAutoPush;

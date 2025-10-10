@@ -1,13 +1,12 @@
 ﻿using ClosedXML.Excel;
-using System;
-using System.Collections.Generic;
+using DocumentFormat.OpenXml.Wordprocessing;
 using System.Data;
-using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Windows.Forms;
+using Color = System.Drawing.Color;
+using Font = System.Drawing.Font;
+
+
 
 namespace CreateGDAPI
 {
@@ -20,9 +19,13 @@ namespace CreateGDAPI
         public int Duration { get; set; }
         public string RefNo { get; set; }
         public string PartnerRef { get; set; }
+        public string TransactionRef { get; set; }
+        public bool IsPaid { get; set; }
+        public bool IsCancelled { get; set; }  // ✅ THÊM MỚI
+        public string TransactionStatus { get; set; }  // ✅ THÊM: "PAID", "CANCELLED", "PENDING"
         public string ErrorMessage { get; set; }
-        public string RequestJson { get; set; }  // Thêm field này
-        public string ResponseJson { get; set; }  // Thêm field này
+        public string RequestJson { get; set; }
+        public string ResponseJson { get; set; }
     }
 
     public class ApiStatistics
@@ -52,20 +55,34 @@ namespace CreateGDAPI
             dtpFrom.Value = DateTime.Now.Date;
             dtpTo.Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1);
 
-            // Load danh sách endpoints vào combobox
             comboFilterEndpoint.Items.Add("-- All Endpoints --");
             comboFilterEndpoint.Items.AddRange(new string[]
             {
-                "HEALTHCHECK", "TRANSFER", "ACCTINQ", "CANCELTRANS",
-                "QUERYINFOR", "TRANSINQ", "UPDATETRANS"
+        "HEALTHCHECK", "TRANSFER", "ACCTINQ", "CANCELTRANS",
+        "QUERYINFOR", "TRANSINQ", "UPDATETRANS"
             });
             comboFilterEndpoint.SelectedIndex = 0;
+
+            // ✅ THÊM ERROR HANDLER
+            dgvDetails.DataError += DgvDetails_DataError;
+            dgvStatistics.DataError += DgvStatistics_DataError;
 
             LoadLogs();
             UpdateStatistics();
             UpdateDetailGrid();
         }
+        private void DgvDetails_DataError(object sender, DataGridViewDataErrorEventArgs e)
+        {
+            // Suppress the error - đã xử lý bằng cách ẩn boolean columns
+            e.ThrowException = false;
+            e.Cancel = true;
+        }
 
+        private void DgvStatistics_DataError(object sender, DataGridViewDataErrorEventArgs e)
+        {
+            e.ThrowException = false;
+            e.Cancel = true;
+        }
         private void LoadLogs()
         {
             _logs.Clear();
@@ -98,7 +115,7 @@ namespace CreateGDAPI
                 {
                     if (string.IsNullOrWhiteSpace(block)) continue;
 
-                    var log = ParseLogBlock(block);
+                    var log = ParseLogEntry(block);
                     if (log != null)
                     {
                         _logs.Add(log);
@@ -111,41 +128,118 @@ namespace CreateGDAPI
             }
         }
 
-        private ApiRequestLog ParseLogBlock(string block)
+        private ApiRequestLog ParseLogEntry(string logEntry)
         {
             try
             {
                 var log = new ApiRequestLog();
-                var lines = block.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var lines = logEntry.Split('\n');
 
                 bool isInRequest = false;
                 bool isInResponse = false;
-                StringBuilder requestBuilder = new StringBuilder();
-                StringBuilder responseBuilder = new StringBuilder();
+                var requestBuilder = new StringBuilder();
+                var responseBuilder = new StringBuilder();
+                string responseCode = null;  // ✅ TRACK RESPONSE CODE
 
                 foreach (var line in lines)
                 {
-                    // Parse timestamp: [2025-10-10 14:30:45]
-                    if (line.StartsWith("[20") && line.Contains("]"))
+                    // ✅ EXTRACT RESPONSE CODE FIRST
+                    if (line.Contains("ResponseCode:"))
                     {
-                        var timestampStr = line.Substring(1, 19);
-                        if (DateTime.TryParse(timestampStr, out var timestamp))
+                        var parts = line.Split(':');
+                        if (parts.Length > 1)
                         {
-                            log.Timestamp = timestamp;
+                            responseCode = parts[1].Trim();
+                            log.ResponseCode = responseCode;
                         }
+                    }
 
-                        // Parse endpoint: [2025-10-10 14:30:45] #1 - TRANSFER
-                        if (line.Contains(" - "))
+                    // ✅ PARSE PAID MARKER
+                    if (line.Contains("💰 PAID"))
+                    {
+                        log.IsPaid = true;
+                        log.TransactionStatus = "PAID";
+                    }
+
+                    // ✅ PARSE CANCELLED MARKER
+                    if (line.Contains("🚫 CANCELLED"))
+                    {
+                        log.IsCancelled = true;
+                        log.TransactionStatus = "CANCELLED";
+                    }
+
+                    // ✅ CHECK FOR ERROR 99
+                    if (responseCode == "99")
+                    {
+                        log.TransactionStatus = "ERROR_99";
+                    }
+
+                    // ✅ PARSE PENDING MARKER (TRANSINQ)
+                    if (line.Contains("⏳ PENDING") || line.Contains("Transaction PENDING"))
+                    {
+                        // Only set PENDING if not ERROR_99
+                        if (responseCode != "99")
                         {
-                            var parts = line.Split(new[] { " - " }, StringSplitOptions.None);
-                            if (parts.Length > 1)
+                            log.TransactionStatus = "PENDING";
+                        }
+                    }
+
+                    if (line.Contains("🔒 Transaction PAID - PartnerRef:"))
+                    {
+                        var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            log.PartnerRef = parts[1].Trim();
+                        }
+                    }
+
+                    if (line.Contains("❌ Transaction CANCELLED - PartnerRef:"))
+                    {
+                        var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            log.PartnerRef = parts[1].Trim();
+                        }
+                    }
+
+                    if (line.Contains("⏳ Transaction PENDING - PartnerRef:"))
+                    {
+                        var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            log.PartnerRef = parts[1].Trim();
+                        }
+                    }
+
+                    if (line.Contains("🆔 TransactionRef:"))
+                    {
+                        var parts = line.Split(new[] { "TransactionRef:" }, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            log.TransactionRef = parts[1].Trim();
+                        }
+                    }
+
+                    if (line.Contains("[") && line.Contains("]") && line.Contains(" - "))
+                    {
+                        var parts = line.Split(new[] { " - " }, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            log.Endpoint = parts[1].Replace("💰 PAID", "")
+                                                  .Replace("🚫 CANCELLED", "")
+                                                  .Replace("⏳ PENDING", "")
+                                                  .Trim().ToUpper();
+
+                            var timestampMatch = System.Text.RegularExpressions.Regex.Match(
+                                line, @"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]");
+                            if (timestampMatch.Success &&
+                                DateTime.TryParse(timestampMatch.Groups[1].Value, out var timestamp))
                             {
-                                log.Endpoint = parts[1].Trim().ToUpper();
+                                log.Timestamp = timestamp;
                             }
                         }
                     }
 
-                    // Parse duration: ⏱️ Duration: 1234 ms
                     if (line.Contains("Duration:") && line.Contains("ms"))
                     {
                         var durationStr = line.Split(':')[1].Replace("ms", "").Trim();
@@ -155,20 +249,6 @@ namespace CreateGDAPI
                         }
                     }
 
-                    // Parse response code: ➡️ ResponseCode: 00
-                    if (line.Contains("ResponseCode:"))
-                    {
-                        log.ResponseCode = line.Split(':')[1].Trim();
-                    }
-
-                    // Parse error
-                    if (line.Contains("ERROR:"))
-                    {
-                        log.ErrorMessage = line.Substring(line.IndexOf("ERROR:") + 6).Trim();
-                        log.Status = "FAILED";
-                    }
-
-                    // Detect REQUEST section
                     if (line.Trim() == "REQUEST:")
                     {
                         isInRequest = true;
@@ -176,7 +256,6 @@ namespace CreateGDAPI
                         continue;
                     }
 
-                    // Detect RESPONSE section
                     if (line.StartsWith("RESPONSE:"))
                     {
                         isInRequest = false;
@@ -184,54 +263,16 @@ namespace CreateGDAPI
                         continue;
                     }
 
-                    // Capture request JSON
-                    if (isInRequest && line.Trim().StartsWith("{"))
-                    {
-                        requestBuilder.Clear();
-                        requestBuilder.AppendLine(line);
-                        isInRequest = true;
-                    }
-                    else if (isInRequest && requestBuilder.Length > 0)
+                    if (isInRequest)
                     {
                         requestBuilder.AppendLine(line);
-                        if (line.Trim() == "}")
-                        {
-                            isInRequest = false;
-                        }
                     }
-
-                    // Capture response JSON
-                    if (isInResponse && line.Trim().StartsWith("{"))
-                    {
-                        responseBuilder.Clear();
-                        responseBuilder.AppendLine(line);
-                    }
-                    else if (isInResponse && responseBuilder.Length > 0)
+                    else if (isInResponse)
                     {
                         responseBuilder.AppendLine(line);
-                        if (line.Trim() == "}")
-                        {
-                            isInResponse = false;
-                        }
                     }
 
-                    // Parse refNo from JSON
-                    if (line.Contains("\"refNo\""))
-                    {
-                        try
-                        {
-                            var refNoStart = line.IndexOf("\"refNo\"") + 9;
-                            var refNoEnd = line.IndexOf("\"", refNoStart + 1);
-                            if (refNoEnd > refNoStart)
-                            {
-                                log.RefNo = line.Substring(refNoStart, refNoEnd - refNoStart);
-                            }
-                        }
-                        catch { }
-                    }
-
-                    // Parse partnerRef from JSON
-                    if (line.Contains("\"partnerRef\""))
+                    if (string.IsNullOrEmpty(log.PartnerRef) && line.Contains("\"partnerRef\""))
                     {
                         try
                         {
@@ -239,7 +280,8 @@ namespace CreateGDAPI
                             var partnerRefEnd = line.IndexOf("\"", partnerRefStart + 1);
                             if (partnerRefEnd > partnerRefStart)
                             {
-                                log.PartnerRef = line.Substring(partnerRefStart, partnerRefEnd - partnerRefStart);
+                                log.PartnerRef = line.Substring(partnerRefStart,
+                                    partnerRefEnd - partnerRefStart);
                             }
                         }
                         catch { }
@@ -249,15 +291,28 @@ namespace CreateGDAPI
                 log.RequestJson = requestBuilder.ToString();
                 log.ResponseJson = responseBuilder.ToString();
 
-                // Xác định status
+                // ✅ SET TRANSACTION STATUS FOR ERROR 99
+                if (log.ResponseCode == "99")
+                {
+                    log.TransactionStatus = "ERROR_99";
+                }
+                // ✅ SET DEFAULT STATUS CHO NHỮNG API KHÔNG CÓ TRANSACTION STATUS
+                else if (string.IsNullOrEmpty(log.TransactionStatus))
+                {
+                    // Chỉ set PENDING cho TRANSFER và TRANSINQ với ResponseCode 00
+                    if ((log.Endpoint == "TRANSFER" || log.Endpoint == "TRANSINQ") && log.ResponseCode == "00")
+                    {
+                        log.TransactionStatus = "PENDING";
+                    }
+                    else
+                    {
+                        log.TransactionStatus = ""; // Các API khác để trống
+                    }
+                }
+
                 if (string.IsNullOrEmpty(log.Status))
                 {
-                    if (log.ResponseCode == "00")
-                        log.Status = "SUCCESS";
-                    else if (!string.IsNullOrEmpty(log.ResponseCode))
-                        log.Status = "FAILED";
-                    else
-                        log.Status = "UNKNOWN";
+                    log.Status = DetermineLogStatus(log.Endpoint, log.ResponseCode, log.ResponseJson);
                 }
 
                 return log;
@@ -378,7 +433,6 @@ namespace CreateGDAPI
                 l.Timestamp >= dtpFrom.Value &&
                 l.Timestamp <= dtpTo.Value).ToList();
 
-            // Filter by endpoint if selected
             string selectedEndpoint = comboFilterEndpoint.SelectedItem?.ToString();
             if (!string.IsNullOrEmpty(selectedEndpoint) && selectedEndpoint != "-- All Endpoints --")
             {
@@ -389,7 +443,6 @@ namespace CreateGDAPI
 
             dgvDetails.DataSource = filteredLogs;
 
-            // Format columns
             if (dgvDetails.Columns.Count > 0)
             {
                 dgvDetails.Columns["Timestamp"].HeaderText = "Thời gian";
@@ -408,6 +461,27 @@ namespace CreateGDAPI
                 dgvDetails.Columns["Duration"].HeaderText = "Duration (ms)";
                 dgvDetails.Columns["Duration"].Width = 100;
 
+                // ✅ ẨN BOOLEAN COLUMNS
+                if (dgvDetails.Columns.Contains("IsPaid"))
+                    dgvDetails.Columns["IsPaid"].Visible = false;
+
+                if (dgvDetails.Columns.Contains("IsCancelled"))
+                    dgvDetails.Columns["IsCancelled"].Visible = false;
+
+                // ✅ HIỂN THỊ TransactionStatus
+                if (dgvDetails.Columns.Contains("TransactionStatus"))
+                {
+                    dgvDetails.Columns["TransactionStatus"].HeaderText = "Transaction Status";
+                    dgvDetails.Columns["TransactionStatus"].Width = 150;
+                    dgvDetails.Columns["TransactionStatus"].DisplayIndex = 4;
+                }
+
+                if (dgvDetails.Columns.Contains("TransactionRef"))
+                {
+                    dgvDetails.Columns["TransactionRef"].HeaderText = "Transaction Ref";
+                    dgvDetails.Columns["TransactionRef"].Width = 180;
+                }
+
                 dgvDetails.Columns["RefNo"].HeaderText = "RefNo";
                 dgvDetails.Columns["RefNo"].Width = 200;
 
@@ -417,15 +491,15 @@ namespace CreateGDAPI
                 dgvDetails.Columns["ErrorMessage"].HeaderText = "Error";
                 dgvDetails.Columns["ErrorMessage"].Width = 250;
 
-                // Hide Request/Response columns from grid
                 if (dgvDetails.Columns.Contains("RequestJson"))
                     dgvDetails.Columns["RequestJson"].Visible = false;
                 if (dgvDetails.Columns.Contains("ResponseJson"))
                     dgvDetails.Columns["ResponseJson"].Visible = false;
 
-                // Color coding for status
+                // ✅ COLOR CODING
                 foreach (DataGridViewRow row in dgvDetails.Rows)
                 {
+                    // Color for Status column
                     if (row.Cells["Status"].Value != null)
                     {
                         string status = row.Cells["Status"].Value.ToString();
@@ -434,10 +508,64 @@ namespace CreateGDAPI
                         else if (status == "FAILED")
                             row.Cells["Status"].Style.BackColor = Color.LightPink;
                     }
+
+                    // ✅ COLOR FOR RESPONSE CODE 99
+                    if (row.Cells["ResponseCode"].Value != null)
+                    {
+                        string respCode = row.Cells["ResponseCode"].Value.ToString();
+                        if (respCode == "99")
+                        {
+                            row.Cells["ResponseCode"].Style.BackColor = Color.Red;
+                            row.Cells["ResponseCode"].Style.ForeColor = Color.White;
+                            row.Cells["ResponseCode"].Style.Font = new Font(dgvDetails.Font, FontStyle.Bold);
+                        }
+                    }
+
+                    // ✅ HIGHLIGHT TRANSACTION STATUS
+                    string endpoint = row.Cells["Endpoint"].Value?.ToString() ?? "";
+                    if ((endpoint == "TRANSFER" || endpoint == "TRANSINQ" || endpoint == "CANCELTRANS" || endpoint == "UPDATETRANS") &&
+                        row.Cells["TransactionStatus"].Value != null)
+                    {
+                        string txStatus = row.Cells["TransactionStatus"].Value.ToString();
+
+                        if (txStatus == "PAID")
+                        {
+                            row.Cells["TransactionStatus"].Value = "💰 PAID";
+                            row.Cells["TransactionStatus"].Style.BackColor = Color.Gold;
+                            row.Cells["TransactionStatus"].Style.ForeColor = Color.DarkGreen;
+                            row.Cells["TransactionStatus"].Style.Font = new Font(dgvDetails.Font, FontStyle.Bold);
+                        }
+                        else if (txStatus == "CANCELLED")
+                        {
+                            row.Cells["TransactionStatus"].Value = "🚫 CANCELLED";
+                            row.Cells["TransactionStatus"].Style.BackColor = Color.LightCoral;
+                            row.Cells["TransactionStatus"].Style.ForeColor = Color.DarkRed;
+                            row.Cells["TransactionStatus"].Style.Font = new Font(dgvDetails.Font, FontStyle.Bold);
+                        }
+                        else if (txStatus == "ERROR_99")
+                        {
+                            row.Cells["TransactionStatus"].Value = "❌ ERROR 99";
+                            row.Cells["TransactionStatus"].Style.BackColor = Color.Red;
+                            row.Cells["TransactionStatus"].Style.ForeColor = Color.White;
+                            row.Cells["TransactionStatus"].Style.Font = new Font(dgvDetails.Font, FontStyle.Bold);
+                        }
+                        else if (txStatus == "PENDING")
+                        {
+                            row.Cells["TransactionStatus"].Value = "⏳ PENDING";
+                            row.Cells["TransactionStatus"].Style.BackColor = Color.LightYellow;
+                        }
+                    }
+                    else
+                    {
+                        // ✅ CÁC API KHÁC: ẨN TRANSACTION STATUS
+                        if (row.Cells["TransactionStatus"] != null)
+                        {
+                            row.Cells["TransactionStatus"].Value = "";
+                        }
+                    }
                 }
             }
         }
-
         private void dgvDetails_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
@@ -642,7 +770,7 @@ namespace CreateGDAPI
             btnClose.FlatAppearance.BorderSize = 0;
             btnClose.Click += (s, e) => detailForm.Close();
 
-            panelButtons.Controls.AddRange(new Control[] {
+            panelButtons.Controls.AddRange(new System.Windows.Forms.Control[] {
                 btnCopyRequest, btnCopyResponse, btnCopyAll, btnClose
             });
 
@@ -660,8 +788,27 @@ namespace CreateGDAPI
             sb.AppendLine();
             sb.AppendLine($"📊 Status: {log.Status}     💬 Response Code: {log.ResponseCode}");
             sb.AppendLine();
+
+            // ✅ HIỂN THỊ TRANSACTION STATUS
+            if (!string.IsNullOrEmpty(log.TransactionStatus))
+            {
+                string statusIcon = log.TransactionStatus switch
+                {
+                    "PAID" => "💰",
+                    "CANCELLED" => "🚫",
+                    _ => "⏳"
+                };
+                sb.AppendLine($"{statusIcon} Transaction Status: {log.TransactionStatus}");
+                sb.AppendLine();
+            }
+
             sb.AppendLine($"🔖 RefNo: {log.RefNo}");
             sb.AppendLine($"🔗 PartnerRef: {log.PartnerRef}");
+
+            if (!string.IsNullOrEmpty(log.TransactionRef))
+            {
+                sb.AppendLine($"🆔 TransactionRef: {log.TransactionRef}");
+            }
 
             if (!string.IsNullOrEmpty(log.ErrorMessage))
             {
@@ -712,7 +859,7 @@ namespace CreateGDAPI
                 // Highlight các phần tử JSON
                 string text = rtb.Text;
 
-                // Highlight keys (trong dấu ngoặc kép trước dấu :)
+                // Highlight keys (trong dấu ngoạc kép trước dấu :)
                 var keyMatches = System.Text.RegularExpressions.Regex.Matches(text, @"""([^""]+)""\s*:");
                 foreach (System.Text.RegularExpressions.Match match in keyMatches)
                 {
@@ -721,7 +868,7 @@ namespace CreateGDAPI
                     rtb.SelectionFont = new Font(rtb.Font, FontStyle.Bold);
                 }
 
-                // Highlight string values (trong dấu ngoặc kép sau dấu :)
+                // Highlight string values (trong dấu ngoạc kép sau dấu :)
                 var stringMatches = System.Text.RegularExpressions.Regex.Matches(text, @":\s*""([^""]*)""");
                 foreach (System.Text.RegularExpressions.Match match in stringMatches)
                 {
@@ -794,51 +941,37 @@ namespace CreateGDAPI
                     // Sheet 1: Statistics
                     var ws1 = workbook.Worksheets.Add("Statistics");
 
-                    // Header
-                    ws1.Cell(1, 1).Value = "API STATISTICS REPORT";
-                    ws1.Cell(1, 1).Style.Font.Bold = true;
-                    ws1.Cell(1, 1).Style.Font.FontSize = 16;
-                    ws1.Range(1, 1, 1, 8).Merge();
+                    // Add headers
+                    ws1.Cell(1, 1).Value = "Endpoint";
+                    ws1.Cell(1, 2).Value = "Total Requests";
+                    ws1.Cell(1, 3).Value = "Success";
+                    ws1.Cell(1, 4).Value = "Failed";
+                    ws1.Cell(1, 5).Value = "Success Rate %";
+                    ws1.Cell(1, 6).Value = "Avg Duration (ms)";
+                    ws1.Cell(1, 7).Value = "Min Duration (ms)";
+                    ws1.Cell(1, 8).Value = "Max Duration (ms)";
 
-                    ws1.Cell(2, 1).Value = $"From: {dtpFrom.Value:yyyy-MM-dd HH:mm:ss}";
-                    ws1.Cell(2, 5).Value = $"To: {dtpTo.Value:yyyy-MM-dd HH:mm:ss}";
+                    // Format headers
+                    ws1.Range(1, 1, 1, 8).Style.Font.Bold = true;
+                    ws1.Range(1, 1, 1, 8).Style.Fill.BackgroundColor = XLColor.LightGray;
 
-                    // Column headers
-                    ws1.Cell(4, 1).Value = "Endpoint";
-                    ws1.Cell(4, 2).Value = "Total Requests";
-                    ws1.Cell(4, 3).Value = "Success Count";
-                    ws1.Cell(4, 4).Value = "Failed Count";
-                    ws1.Cell(4, 5).Value = "Success Rate %";
-                    ws1.Cell(4, 6).Value = "Avg Duration (ms)";
-                    ws1.Cell(4, 7).Value = "Min Duration (ms)";
-                    ws1.Cell(4, 8).Value = "Max Duration (ms)";
-
-                    ws1.Range(4, 1, 4, 8).Style.Font.Bold = true;
-                    ws1.Range(4, 1, 4, 8).Style.Fill.BackgroundColor = XLColor.LightGray;
-
-                    // Data
-                    int row = 5;
+                    // Add data from dgvStatistics
                     var stats = (List<ApiStatistics>)dgvStatistics.DataSource;
-                    foreach (var stat in stats)
+                    if (stats != null)
                     {
-                        ws1.Cell(row, 1).Value = stat.Endpoint;
-                        ws1.Cell(row, 2).Value = stat.TotalRequests;
-                        ws1.Cell(row, 3).Value = stat.SuccessCount;
-                        ws1.Cell(row, 4).Value = stat.FailedCount;
-                        ws1.Cell(row, 5).Value = stat.SuccessRate;
-                        ws1.Cell(row, 6).Value = stat.AvgDuration;
-                        ws1.Cell(row, 7).Value = stat.MinDuration;
-                        ws1.Cell(row, 8).Value = stat.MaxDuration;
-
-                        // Color coding
-                        if (stat.SuccessRate >= 90)
-                            ws1.Cell(row, 5).Style.Fill.BackgroundColor = XLColor.LightGreen;
-                        else if (stat.SuccessRate >= 70)
-                            ws1.Cell(row, 5).Style.Fill.BackgroundColor = XLColor.Yellow;
-                        else
-                            ws1.Cell(row, 5).Style.Fill.BackgroundColor = XLColor.LightPink;
-
-                        row++;
+                        int row = 2;
+                        foreach (var stat in stats)
+                        {
+                            ws1.Cell(row, 1).Value = stat.Endpoint;
+                            ws1.Cell(row, 2).Value = stat.TotalRequests;
+                            ws1.Cell(row, 3).Value = stat.SuccessCount;
+                            ws1.Cell(row, 4).Value = stat.FailedCount;
+                            ws1.Cell(row, 5).Value = stat.SuccessRate;
+                            ws1.Cell(row, 6).Value = stat.AvgDuration;
+                            ws1.Cell(row, 7).Value = stat.MinDuration;
+                            ws1.Cell(row, 8).Value = stat.MaxDuration;
+                            row++;
+                        }
                     }
 
                     ws1.Columns().AdjustToContents();
@@ -851,32 +984,50 @@ namespace CreateGDAPI
                     ws2.Cell(1, 3).Value = "Response Code";
                     ws2.Cell(1, 4).Value = "Status";
                     ws2.Cell(1, 5).Value = "Duration (ms)";
-                    ws2.Cell(1, 6).Value = "RefNo";
-                    ws2.Cell(1, 7).Value = "PartnerRef";
-                    ws2.Cell(1, 8).Value = "Error Message";
+                    ws2.Cell(1, 6).Value = "Transaction Status";
+                    ws2.Cell(1, 7).Value = "TransactionRef";
+                    ws2.Cell(1, 8).Value = "RefNo";
+                    ws2.Cell(1, 9).Value = "PartnerRef";
+                    ws2.Cell(1, 10).Value = "Error Message";
 
-                    ws2.Range(1, 1, 1, 8).Style.Font.Bold = true;
-                    ws2.Range(1, 1, 1, 8).Style.Fill.BackgroundColor = XLColor.LightGray;
+                    ws2.Range(1, 1, 1, 10).Style.Font.Bold = true;
+                    ws2.Range(1, 1, 1, 10).Style.Fill.BackgroundColor = XLColor.LightGray;
 
-                    row = 2;
+                    int detailRow = 2;
                     var details = (List<ApiRequestLog>)dgvDetails.DataSource;
-                    foreach (var log in details)
+                    if (details != null)
                     {
-                        ws2.Cell(row, 1).Value = log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
-                        ws2.Cell(row, 2).Value = log.Endpoint;
-                        ws2.Cell(row, 3).Value = log.ResponseCode;
-                        ws2.Cell(row, 4).Value = log.Status;
-                        ws2.Cell(row, 5).Value = log.Duration;
-                        ws2.Cell(row, 6).Value = log.RefNo;
-                        ws2.Cell(row, 7).Value = log.PartnerRef;
-                        ws2.Cell(row, 8).Value = log.ErrorMessage;
+                        foreach (var log in details)
+                        {
+                            ws2.Cell(detailRow, 1).Value = log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
+                            ws2.Cell(detailRow, 2).Value = log.Endpoint;
+                            ws2.Cell(detailRow, 3).Value = log.ResponseCode;
+                            ws2.Cell(detailRow, 4).Value = log.Status;
+                            ws2.Cell(detailRow, 5).Value = log.Duration;
+                            ws2.Cell(detailRow, 6).Value = log.TransactionStatus ?? "";
+                            ws2.Cell(detailRow, 7).Value = log.TransactionRef ?? "";
+                            ws2.Cell(detailRow, 8).Value = log.RefNo;
+                            ws2.Cell(detailRow, 9).Value = log.PartnerRef;
+                            ws2.Cell(detailRow, 10).Value = log.ErrorMessage;
 
-                        if (log.Status == "SUCCESS")
-                            ws2.Cell(row, 4).Style.Fill.BackgroundColor = XLColor.LightGreen;
-                        else if (log.Status == "FAILED")
-                            ws2.Cell(row, 4).Style.Fill.BackgroundColor = XLColor.LightPink;
+                            // Color coding for Status
+                            if (log.Status == "SUCCESS")
+                                ws2.Cell(detailRow, 4).Style.Fill.BackgroundColor = XLColor.LightGreen;
+                            else if (log.Status == "FAILED")
+                                ws2.Cell(detailRow, 4).Style.Fill.BackgroundColor = XLColor.LightPink;
 
-                        row++;
+                            // Color coding for Transaction Status
+                            if (log.TransactionStatus == "PAID")
+                                ws2.Cell(detailRow, 6).Style.Fill.BackgroundColor = XLColor.Gold;
+                            else if (log.TransactionStatus == "CANCELLED")
+                                ws2.Cell(detailRow, 6).Style.Fill.BackgroundColor = XLColor.LightCoral;
+                            else if (log.TransactionStatus == "ERROR_99")
+                                ws2.Cell(detailRow, 6).Style.Fill.BackgroundColor = XLColor.Red;
+                            else if (log.TransactionStatus == "PENDING")
+                                ws2.Cell(detailRow, 6).Style.Fill.BackgroundColor = XLColor.LightYellow;
+
+                            detailRow++;
+                        }
                     }
 
                     ws2.Columns().AdjustToContents();
@@ -889,13 +1040,12 @@ namespace CreateGDAPI
                     MessageBox.Show($"Đã xuất báo cáo thành công!\n{savePath}",
                         "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-                    // Open file
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = savePath,
                         UseShellExecute = true
                     });
-                }
+                };
             }
             catch (Exception ex)
             {
@@ -938,6 +1088,41 @@ namespace CreateGDAPI
         private void btnResetFilter_Click(object sender, EventArgs e)
         {
             UpdateDetailGrid();
+        }
+
+        // ✅ SỬA HÀM XÁC ĐỊNH STATUS
+        private string DetermineLogStatus(string endpoint, string responseCode, string responseJson)
+        {
+            // ✅ SPECIAL CASE: QUERYINFOR với status=400 nhưng có response hợp lệ
+            if (endpoint == "QUERYINFOR")
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(responseJson);
+
+                    // Kiểm tra có field "response" là array và có data không
+                    if (doc.RootElement.TryGetProperty("response", out var responseArray)
+                        && responseArray.ValueKind == JsonValueKind.Array
+                        && responseArray.GetArrayLength() > 0)
+                    {
+                        // Có response data hợp lệ -> SUCCESS
+                        var firstItem = responseArray[0];
+                        if (firstItem.TryGetProperty("balance", out var balance))
+                        {
+                            return "SUCCESS";  // ✅ Có balance -> thành công
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // Logic cũ cho các endpoint khác
+            if (responseCode == "00")
+                return "SUCCESS";
+            else if (!string.IsNullOrEmpty(responseCode))
+                return "FAILED";
+            else
+                return "UNKNOWN";
         }
     }
 }
