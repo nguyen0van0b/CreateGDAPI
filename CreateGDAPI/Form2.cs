@@ -12,6 +12,11 @@ using System.Windows.Forms;
 
 namespace CreateGDAPI
 {
+    public class CheckedFieldsConfig
+    {
+        public List<string> SelectedFields { get; set; } = new();
+    }
+
     public partial class Form2 : Form
     {
         private readonly HttpClientHandler? handler;
