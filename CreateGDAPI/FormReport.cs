@@ -26,6 +26,10 @@ namespace CreateGDAPI
         public string ErrorMessage { get; set; } = string.Empty;
         public string RequestJson { get; set; } = string.Empty;
         public string ResponseJson { get; set; } = string.Empty;
+
+        // 1. Thêm 2 property mới vào ApiRequestLog để lưu balance và currency:
+        public decimal? Balance { get; set; } // Số dư
+        public string Currency { get; set; } = string.Empty; // Loại tiền
     }
 
     public class ApiStatistics
@@ -192,14 +196,6 @@ namespace CreateGDAPI
                     {
                         log.Status = line.Split(':')[1].Trim();
                     }
-                    else if (line.StartsWith("Duration:"))
-                    {
-                        var durationStr = line.Split(':')[1].Replace("ms", "").Trim();
-                        if (int.TryParse(durationStr, out var duration))
-                        {
-                            log.Duration = duration;
-                        }
-                    }
                     else if (line.StartsWith("ResponseCode:"))
                     {
                         log.ResponseCode = line.Split(':')[1].Trim();
@@ -256,17 +252,87 @@ namespace CreateGDAPI
                 log.RequestJson = requestBuilder.ToString().Trim();
                 log.ResponseJson = responseBuilder.ToString().Trim();
 
+                // --- ĐẶC BIỆT: TRANSFER PENDING ---
+                if (log.Endpoint == "TRANSFER")
+                {
+                    // Nếu status là 202 hoặc responseCode là "05" thì coi là PENDING nhưng Status là SUCCESS
+                    if (log.Status == "202" || log.ResponseCode == "05" || log.ResponseCode == "98")
+                    {
+                        log.TransactionStatus = "PENDING";
+                        log.Status = "SUCCESS";
+                    }
+                }
+
+                // --- ĐẶC BIỆT: CANCELTRANS responseCode == "07" KHÔNG TÍNH LÀ THẤT BẠI ---
+                if (log.Endpoint == "CANCELTRANS")
+                {
+                    if (log.ResponseCode == "07")
+                    {
+                        log.Status = "SUCCESS";
+                        log.TransactionStatus = "NOT_ALLOWED";
+                    }
+                }
+
                 // ✅ SET ERROR_99 STATUS
                 if (log.ResponseCode == "99")
                 {
                     log.TransactionStatus = "ERROR_99";
                 }
 
-                // ✅ DETERMINE LOG STATUS if not set
-                if (string.IsNullOrEmpty(log.Status))
+                // --- ĐẶC BIỆT: QUERYINFOR ---
+                if (log.Endpoint == "QUERYINFOR")
                 {
-                    log.Status = DetermineLogStatus(log.Endpoint, log.ResponseCode, log.ResponseJson);
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(log.ResponseJson);
+                        if (doc.RootElement.TryGetProperty("response", out var responseArray)
+                            && responseArray.ValueKind == JsonValueKind.Array
+                            && responseArray.GetArrayLength() > 0)
+                        {
+                            var firstItem = responseArray[0];
+                            if (firstItem.TryGetProperty("balance", out var balanceProp))
+                            {
+                                if (balanceProp.TryGetDecimal(out var balance))
+                                    log.Balance = balance;
+                            }
+                            if (firstItem.TryGetProperty("currency", out var currencyProp))
+                            {
+                                log.Currency = currencyProp.GetString() ?? "";
+                            }
+                            log.Status = "SUCCESS";
+                        }
+                    }
+                    catch
+                    {
+                        // Nếu lỗi parse vẫn cho phép log tiếp tục
+                    }
                 }
+
+                // --- ĐẶC BIỆT: TRANSINQ ---
+                if (log.Endpoint == "TRANSINQ")
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(log.ResponseJson);
+                        if (doc.RootElement.TryGetProperty("response", out var responseObj)
+                            && responseObj.ValueKind == JsonValueKind.Object)
+                        {
+                            if (responseObj.TryGetProperty("responseCode", out var respCodeProp)
+                                && respCodeProp.GetString() == "07")
+                            {
+                                log.TransactionStatus = "Payable";
+                                log.Status = "SUCCESS";
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                //// ✅ DETERMINE LOG STATUS if not set
+                //if (string.IsNullOrEmpty(log.Status))
+                //{
+                //    log.Status = DetermineLogStatus(log.Endpoint, log.ResponseCode, log.ResponseJson);
+                //}
 
                 return log;
             }
@@ -296,7 +362,9 @@ namespace CreateGDAPI
                     Endpoint = g.Key,
                     TotalRequests = g.Count(),
                     SuccessCount = g.Count(l => l.Status == "SUCCESS"),
-                    FailedCount = g.Count(l => l.Status == "FAILED"),
+                    FailedCount = g.Key == "TRANSFER"
+                        ? g.Count(l => l.Status == "FAILED" && l.TransactionStatus != "PENDING")
+                        : g.Count(l => l.Status == "FAILED"),
                     SuccessRate = g.Count() > 0 ? (g.Count(l => l.Status == "SUCCESS") * 100.0 / g.Count()) : 0,
                     AvgDuration = g.Where(l => l.Duration > 0).Any() ? (int)g.Where(l => l.Duration > 0).Average(l => l.Duration) : 0,
                     MinDuration = g.Where(l => l.Duration > 0).Any() ? g.Where(l => l.Duration > 0).Min(l => l.Duration) : 0,
@@ -379,20 +447,20 @@ namespace CreateGDAPI
             }
         }
 
-        private void UpdateDetailGrid()
+        // 1. Sửa hàm UpdateDetailGrid để nhận thêm tham số endpoint (string? endpoint = null)
+        private void UpdateDetailGrid(string? SEndpoint = null)
         {
             var filteredLogs = _logs.Where(l =>
                 l.Timestamp >= dtpFrom.Value &&
                 l.Timestamp <= dtpTo.Value).ToList();
 
-            string selectedEndpoint = comboFilterEndpoint.SelectedItem?.ToString();
+            string selectedEndpoint = SEndpoint ?? comboFilterEndpoint.SelectedItem?.ToString();
             if (!string.IsNullOrEmpty(selectedEndpoint) && selectedEndpoint != "-- All Endpoints --")
             {
                 filteredLogs = filteredLogs.Where(l => l.Endpoint == selectedEndpoint).ToList();
             }
 
             filteredLogs = filteredLogs.OrderByDescending(l => l.Timestamp).ToList();
-
             dgvDetails.DataSource = filteredLogs;
 
             if (dgvDetails.Columns.Count > 0)
@@ -462,23 +530,31 @@ namespace CreateGDAPI
                     }
 
                     // ✅ COLOR FOR RESPONSE CODE 99
-                    if (row.Cells["ResponseCode"].Value != null)
+                    if (row.Cells["ResponseCode"].Value != null && row.Cells["Endpoint"].Value != null)
                     {
                         string respCode = row.Cells["ResponseCode"].Value.ToString();
-                        if (respCode == "99")
+                        string endpoint = row.Cells["Endpoint"].Value.ToString();
+                        if (respCode == "99" && endpoint == "TRANSFER")
                         {
                             row.Cells["ResponseCode"].Style.BackColor = Color.Red;
                             row.Cells["ResponseCode"].Style.ForeColor = Color.White;
                             row.Cells["ResponseCode"].Style.Font = new Font(dgvDetails.Font, FontStyle.Bold);
                         }
+                        else
+                        {
+                            // Reset style nếu không phải TRANSFER hoặc không phải 99
+                            row.Cells["ResponseCode"].Style.BackColor = dgvDetails.DefaultCellStyle.BackColor;
+                            row.Cells["ResponseCode"].Style.ForeColor = dgvDetails.DefaultCellStyle.ForeColor;
+                            row.Cells["ResponseCode"].Style.Font = dgvDetails.Font;
+                        }
                     }
 
                     // ✅ HIGHLIGHT TRANSACTION STATUS
-                    string endpoint = row.Cells["Endpoint"].Value?.ToString() ?? "";
-                    if ((endpoint == "TRANSFER" || endpoint == "TRANSINQ" || endpoint == "CANCELTRANS" || endpoint == "UPDATETRANS") &&
+                    string endpointCellValue = row.Cells["Endpoint"].Value?.ToString() ?? "";
+                    if ((endpointCellValue == "TRANSFER" || endpointCellValue == "TRANSINQ" || endpointCellValue == "CANCELTRANS" || endpointCellValue == "UPDATETRANS") &&
                         row.Cells["TransactionStatus"].Value != null)
                     {
-                        string txStatus = row.Cells["TransactionStatus"].Value.ToString();
+                        string txStatus = row.Cells["TransactionStatus"].Value?.ToString() ?? "";
 
                         if (txStatus == "PAID")
                         {
@@ -515,6 +591,78 @@ namespace CreateGDAPI
                             row.Cells["TransactionStatus"].Value = "";
                         }
                     }
+                }
+
+                // 1. Trong UpdateDetailGrid, thêm 2 cột Balance và Currency vào lưới chi tiết nếu là QUERYINFOR
+
+                // Thêm cột Balance nếu chưa có
+                if (!dgvDetails.Columns.Contains("Balance"))
+                {
+                    var col = new DataGridViewTextBoxColumn
+                    {
+                        Name = "Balance",
+                        HeaderText = "Balance",
+                        Width = 260,
+                        DataPropertyName = "Balance",
+                        DefaultCellStyle = { Format = "N2" }
+                    };
+                    dgvDetails.Columns.Add(col);
+                }
+                dgvDetails.Columns["Balance"].DisplayIndex = dgvDetails.Columns.Count - 2;
+
+                // Thêm cột Currency nếu chưa có
+                if (!dgvDetails.Columns.Contains("Currency"))
+                {
+                    var col = new DataGridViewTextBoxColumn
+                    {
+                        Name = "Currency",
+                        HeaderText = "Currency",
+                        Width = 150,
+                        DataPropertyName = "Currency"
+                    };
+                    dgvDetails.Columns.Add(col);
+                }
+                dgvDetails.Columns["Currency"].DisplayIndex = dgvDetails.Columns.Count - 1;
+
+                // Ẩn 2 cột này nếu không phải QUERYINFOR
+                foreach (DataGridViewRow row in dgvDetails.Rows)
+                {
+                    string endpoint = row.Cells["Endpoint"].Value?.ToString() ?? "";
+                    bool isQueryInfor = endpoint == "QUERYINFOR";
+                    row.Cells["Balance"].ReadOnly = true;
+                    row.Cells["Currency"].ReadOnly = true;
+                    row.Cells["Balance"].Style.BackColor = isQueryInfor ? Color.LightYellow : dgvDetails.DefaultCellStyle.BackColor;
+                    row.Cells["Currency"].Style.BackColor = isQueryInfor ? Color.LightYellow : dgvDetails.DefaultCellStyle.BackColor;
+                    row.Cells["Balance"].Style.ForeColor = isQueryInfor ? Color.DarkBlue : dgvDetails.DefaultCellStyle.ForeColor;
+                    row.Cells["Currency"].Style.ForeColor = isQueryInfor ? Color.DarkBlue : dgvDetails.DefaultCellStyle.ForeColor;
+                    if (!isQueryInfor)
+                    {
+                        row.Cells["Balance"].Value = null;
+                        row.Cells["Currency"].Value = "";
+                    }
+                }
+
+                // Ẩn/hiện các cột tùy theo endpoint
+                foreach (DataGridViewRow row in dgvDetails.Rows)
+                {
+                    string endpoint = row.Cells["Endpoint"].Value?.ToString() ?? "";
+
+                    // Nếu là QUERYINFOR thì ẩn RefNo, PartnerRef, TransactionStatus
+                    bool isQueryInfor = endpoint == "QUERYINFOR";
+                    if (dgvDetails.Columns.Contains("RefNo"))
+                        dgvDetails.Columns["RefNo"].Visible = !isQueryInfor;
+                    if (dgvDetails.Columns.Contains("PartnerRef"))
+                        dgvDetails.Columns["PartnerRef"].Visible = !isQueryInfor;
+                    if (dgvDetails.Columns.Contains("TransactionStatus"))
+                        dgvDetails.Columns["TransactionStatus"].Visible = !isQueryInfor;
+                    if (dgvDetails.Columns.Contains("TransactionRef"))
+                        dgvDetails.Columns["TransactionRef"].Visible = !isQueryInfor;
+                    if (isQueryInfor)dgvDetails.Columns["ErrorMessage"].Width = 150;
+                    // Nếu là QUERYINFOR thì hiện Balance, Currency, ngược lại ẩn
+                    if (dgvDetails.Columns.Contains("Balance"))
+                        dgvDetails.Columns["Balance"].Visible = isQueryInfor;
+                    if (dgvDetails.Columns.Contains("Currency"))
+                        dgvDetails.Columns["Currency"].Visible = isQueryInfor;
                 }
             }
         }
@@ -770,6 +918,13 @@ namespace CreateGDAPI
             sb.AppendLine($"📊 Status: {log.Status}     💬 Response Code: {log.ResponseCode}");
             sb.AppendLine();
 
+            // Hiển thị số dư và loại tiền cho QUERYINFOR
+            if (log.Endpoint == "QUERYINFOR" && log.Balance.HasValue)
+            {
+                sb.AppendLine($"💵 Balance: {log.Balance:N2} {log.Currency}");
+                sb.AppendLine();
+            }
+
             // ✅ TRANSACTION STATUS với icon
             if (!string.IsNullOrEmpty(log.TransactionStatus))
             {
@@ -1016,6 +1171,8 @@ namespace CreateGDAPI
                                 ws2.Cell(detailRow, 6).Style.Fill.BackgroundColor = XLColor.Red;
                             else if (log.TransactionStatus == "PENDING")
                                 ws2.Cell(detailRow, 6).Style.Fill.BackgroundColor = XLColor.LightYellow;
+                            else if (log.TransactionStatus == "Payable")
+                                ws2.Cell(detailRow, 6).Style.Fill.BackgroundColor = XLColor.LightSkyBlue;
 
                             detailRow++;
                         }
@@ -1063,15 +1220,14 @@ namespace CreateGDAPI
             var endpoint = dgvStatistics.Rows[e.RowIndex].Cells["Endpoint"].Value?.ToString();
             if (string.IsNullOrEmpty(endpoint)) return;
 
-            // Filter details by endpoint
+            UpdateDetailGrid(endpoint);
+
             var filtered = _logs.Where(l =>
                 l.Endpoint == endpoint &&
                 l.Timestamp >= dtpFrom.Value &&
                 l.Timestamp <= dtpTo.Value)
                 .OrderByDescending(l => l.Timestamp)
                 .ToList();
-
-            dgvDetails.DataSource = filtered;
 
             MessageBox.Show($"Đã lọc {filtered.Count} requests cho endpoint: {endpoint}",
                 "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1080,41 +1236,6 @@ namespace CreateGDAPI
         private void btnResetFilter_Click(object sender, EventArgs e)
         {
             UpdateDetailGrid();
-        }
-
-        // ✅ SỬA HÀM XÁC ĐỊNH STATUS
-        private string DetermineLogStatus(string endpoint, string responseCode, string responseJson)
-        {
-            // ✅ SPECIAL CASE: QUERYINFOR với status=400 nhưng có response hợp lệ
-            if (endpoint == "QUERYINFOR")
-            {
-                try
-                {
-                    using var doc = JsonDocument.Parse(responseJson);
-
-                    // Kiểm tra có field "response" là array và có data không
-                    if (doc.RootElement.TryGetProperty("response", out var responseArray)
-                        && responseArray.ValueKind == JsonValueKind.Array
-                        && responseArray.GetArrayLength() > 0)
-                    {
-                        // Có response data hợp lệ -> SUCCESS
-                        var firstItem = responseArray[0];
-                        if (firstItem.TryGetProperty("balance", out var balance))
-                        {
-                            return "SUCCESS";  // ✅ Có balance -> thành công
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            // Logic cũ cho các endpoint khác
-            if (responseCode == "00")
-                return "SUCCESS";
-            else if (!string.IsNullOrEmpty(responseCode))
-                return "FAILED";
-            else
-                return "UNKNOWN";
         }
     }
 }

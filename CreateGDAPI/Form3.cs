@@ -713,7 +713,7 @@ RESPONSE: {healthResponse.StatusCode}
                     }
 
                     // Lưu TRANSFER transaction
-                    if (endpoint == "transfer" && responseCode == "00")
+                    if (endpoint == "transfer" )
                     {
                         SaveTransactionInfo(doc.RootElement, responseCode);
                     }
