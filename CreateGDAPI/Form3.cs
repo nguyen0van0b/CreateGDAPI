@@ -51,6 +51,9 @@ namespace CreateGDAPI
             // Initialize auto push timer
             _autoTimer = new System.Windows.Forms.Timer();
             _autoTimer.Tick += AutoTimer_Tick;
+            txtPartnerCode.TextChanged += txtPartnerCode_TextChanged;
+            txtAgencyCode.TextChanged += txtAgencyCode_TextChanged;
+
         }
 
         private async void AutoTimer_Tick(object sender, EventArgs e)
@@ -140,11 +143,9 @@ namespace CreateGDAPI
             _isAutoPushingBatch = true;
             _pendingRequests = 0;
 
-            btnStartAutoPush.Text = "⏸️ Stop Auto Push";
-            btnStartAutoPush.BackColor = Color.FromArgb(255, 128, 128);
-            btnSendRequest.Enabled = false;
-            comboApiEndpoint.Enabled = false;
 
+            // Gọi hàm đã clean
+            StartAutoPush();
             // ✅ TÍNH TOÁN INTERVAL DựA trên numAutoPushInterval
             // VD: numAutoPushInterval = 0.1 giây → 10 requests/second → 100ms interval
             double intervalSeconds = (double)numAutoPushInterval.Value;
@@ -259,7 +260,7 @@ namespace CreateGDAPI
             });
             comboApiEndpoint.SelectedIndex = 0;
 
-            comboCurrency.Items.AddRange(new string[] { "VND", "USD" });
+            comboCurrency.Items.AddRange(new string[] { "USD" , "VND" });
             comboCurrency.SelectedIndex = 0;
 
             comboServiceType.Items.AddRange(new string[] { "AD", "WD", "CP", "HD" });
@@ -273,6 +274,9 @@ namespace CreateGDAPI
 
             // ✅ THÊM: Load paid transactions từ log
             LoadPaidTransactionsFromLog();
+
+            txtPartnerCode.Text = Properties.Settings.Default.PartnerCode;
+            txtAgencyCode.Text = Properties.Settings.Default.AgencyCode;
         }
         private void LoadPaidTransactionsFromLog()
         {
@@ -370,7 +374,7 @@ namespace CreateGDAPI
                         }
 
                         // ✅ TẠO TRANSACTION INFO CHO MỌI TRANSFER (không chỉ PAID)
-                        if (!string.IsNullOrEmpty(partnerRef) && !string.IsNullOrEmpty(responseCode))
+                        if (!string.IsNullOrEmpty(partnerRef) && !string.IsNullOrEmpty(responseCode) && responseCode != "04")
                         {
                             var existingTransaction = _createdTransactions
                                 .FirstOrDefault(t => t.PartnerRef == partnerRef);
@@ -544,7 +548,7 @@ namespace CreateGDAPI
                 foreach (var row in ws.RowsUsed().Skip(1))
                 {
                     string wardName = row.Cell(3).GetString().Trim();
-                    string provinceName = row.Cell(6).GetString().Trim();
+                    string provinceName = row.Cell(5).GetString().Trim();
 
                     if (string.IsNullOrEmpty(wardName) || string.IsNullOrEmpty(provinceName))
                         continue;
@@ -705,102 +709,36 @@ RESPONSE: {healthResponse.StatusCode}
                     if (doc.RootElement.TryGetProperty("response", out var responseObj) &&
                         responseObj.TryGetProperty("responseCode", out var codeProp))
                     {
-                        responseCode = codeProp.GetString();
+                        responseCode = codeProp.GetString() ?? "";
                     }
 
-                    // ✅ LƯU TRANSFER TRANSACTION với ResponseCode
+                    // Lưu TRANSFER transaction
                     if (endpoint == "transfer" && responseCode == "00")
                     {
                         SaveTransactionInfo(doc.RootElement, responseCode);
                     }
 
-                    // ✅ CẬP NHẬT CANCEL STATUS
-                    // Thay thế đoạn cập nhật trạng thái CANCELLED trong SendPostRequest bằng đoạn sau
-                    // (bổ sung cập nhật trạng thái vào file log nếu tìm thấy transaction)
-
+                    // Xử lý CANCELTRANS
                     if (endpoint == "canceltrans" && responseCode == "00")
                     {
-                        string apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
+                        string? apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
                             ? statusProp.GetString()
                             : "0";
 
                         if (doc.RootElement.TryGetProperty("partnerRef", out var prProp))
                         {
-                            partnerRef = prProp.GetString();
+                            partnerRef = prProp.GetString() ?? "";
                         }
 
-                        if (endpoint == "canceltrans" && responseCode == "00")
+                        if (apiStatus == "500" && !string.IsNullOrEmpty(partnerRef))
                         {
-                            // Use unique variable names to avoid CS0136
-                            string apiStatus2 = doc.RootElement.TryGetProperty("status", out var statusProp2)
-                                ? statusProp2.GetString() ?? "0"
-                                : "0";
+                            // Update in-memory transaction
+                            MarkTransactionAsCancelled(partnerRef);
 
-                            string partnerRef2 = partnerRef;
-                            if (doc.RootElement.TryGetProperty("partnerRef", out var prProp2))
-                            {
-                                partnerRef2 = prProp2.GetString() ?? string.Empty;
-                            }
-
-                            // Replace the block that updates the log file for CANCELLED transactions
-                            if (apiStatus2 == "500" && !string.IsNullOrEmpty(partnerRef2))
-                            {
-                                MarkTransactionAsCancelled(partnerRef2);
-
-                                // Cập nhật trạng thái CANCELLED vào file log nếu chưa từng có
-                                try
-                                {
-                                    string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
-                                    string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
-                                    if (File.Exists(logPath))
-                                    {
-                                        string logContent = File.ReadAllText(logPath, Encoding.UTF8);
-                                        // Kiểm tra đã có dòng CANCELLED cho partnerRef chưa
-                                        string cancelLine = $"❌ Transaction CANCELLED - PartnerRef: {partnerRef2}";
-                                        string updatedLine = $"🚫 [UPDATED] Transaction CANCELLED - PartnerRef: {partnerRef2}";
-                                        if (!logContent.Contains(cancelLine) && !logContent.Contains(updatedLine))
-                                        {
-                                            var lines = logContent.Split(new[] { Environment.NewLine }, StringSplitOptions.None).ToList();
-                                            // Tìm vị trí dòng PAID/PENDING của partnerRef2 để chèn CANCELLED ngay sau đó
-                                            int insertIndex = -1;
-                                            for (int i = 0; i < lines.Count; i++)
-                                            {
-                                                // Tìm dòng có PartnerRef và là PAID hoặc PENDING
-                                                if (
-                                                    (lines[i].Contains("🔒 Transaction PAID - PartnerRef:") ||
-                                                     lines[i].Contains("⏳ Transaction PENDING - PartnerRef:")) &&
-                                                    lines[i].Contains(partnerRef2)
-                                                )
-                                                {
-                                                    insertIndex = i + 1;
-                                                    break;
-                                                }
-                                            }
-                                            // Nếu tìm thấy vị trí PAID/PENDING thì chèn sau đó, nếu không thì tìm dòng partnerRef bất kỳ
-                                            if (insertIndex == -1)
-                                            {
-                                                for (int i = 0; i < lines.Count; i++)
-                                                {
-                                                    if (lines[i].Contains(partnerRef2))
-                                                    {
-                                                        insertIndex = i + 1;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                            // Nếu vẫn không tìm thấy thì chèn vào cuối
-                                            if (insertIndex == -1) insertIndex = lines.Count;
-
-                                            lines.Insert(insertIndex, updatedLine);
-                                            File.WriteAllText(logPath, string.Join(Environment.NewLine, lines), Encoding.UTF8);
-                                        }
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    AppendResult($"[LOG UPDATE ERROR] ❌ {ex.Message}\r\n");
-                                }
-                            }
+                            // Update log file với format chuẩn
+                            string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+                            string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
+                            UpdatePendingToCancelled(logPath, partnerRef);
                         }
                     }
                 }
@@ -821,7 +759,55 @@ RESPONSE: {healthResponse.StatusCode}
                 WriteApiLog(endpoint, "ERROR", 0, "", ex.Message, json, null);
             }
         }
+        private void UpdateLogFileForCancelled(string partnerRef)
+        {
+            try
+            {
+                string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+                string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
 
+                if (File.Exists(logPath))
+                {
+                    string logContent = File.ReadAllText(logPath, Encoding.UTF8);
+                    string cancelLine = $"❌ Transaction CANCELLED - PartnerRef: {partnerRef}";
+                    string updatedLine = $"🚫 [UPDATED] Transaction CANCELLED - PartnerRef: {partnerRef}";
+
+                    if (!logContent.Contains(cancelLine) && !logContent.Contains(updatedLine))
+                    {
+                        var lines = logContent.Split(new[] { Environment.NewLine }, StringSplitOptions.None).ToList();
+                        int insertIndex = FindInsertIndex(lines, partnerRef);
+                        lines.Insert(insertIndex, updatedLine);
+                        File.WriteAllText(logPath, string.Join(Environment.NewLine, lines), Encoding.UTF8);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[LOG UPDATE ERROR] ❌ {ex.Message}\r\n");
+            }
+        }
+        private int FindInsertIndex(List<string> lines, string partnerRef)
+        {
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if ((lines[i].Contains("🔒 Transaction PAID - PartnerRef:") ||
+                     lines[i].Contains("⏳ Transaction PENDING - PartnerRef:")) &&
+                    lines[i].Contains(partnerRef))
+                {
+                    return i + 1;
+                }
+            }
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].Contains(partnerRef))
+                {
+                    return i + 1;
+                }
+            }
+
+            return lines.Count;
+        }
         private string FormatJsonForLog(string json)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -847,13 +833,13 @@ RESPONSE: {healthResponse.StatusCode}
         {
             try
             {
-                string refNo = root.GetProperty("refNo").GetString();
-                string partnerRef = root.GetProperty("partnerRef").GetString();
-                string partnerCode = root.GetProperty("partnerCode").GetString();
-                string transactionRef = root.TryGetProperty("transactionRef", out var trElement)
+                string? refNo = root.GetProperty("refNo").GetString();
+                string? partnerRef = root.GetProperty("partnerRef").GetString();
+                string? partnerCode = root.GetProperty("partnerCode").GetString();
+                string? transactionRef = root.TryGetProperty("transactionRef", out var trElement)
                     ? trElement.GetString()
                     : null;
-                string status = root.TryGetProperty("status", out var statusElement)
+                string? status = root.TryGetProperty("status", out var statusElement)
                     ? statusElement.GetString()
                     : "0";
 
@@ -861,13 +847,13 @@ RESPONSE: {healthResponse.StatusCode}
 
                 var info = new TransactionInfo
                 {
-                    RefNo = refNo,
-                    PartnerRef = partnerRef,
-                    PartnerCode = partnerCode,
+                    RefNo = refNo ?? string.Empty,
+                    PartnerRef = partnerRef ?? string.Empty,
+                    PartnerCode = partnerCode ?? string.Empty,
                     TransactionRef = transactionRef,
                     IsPaid = isPaid,
                     IsCancelled = false,
-                    ResponseCode = responseCode  // ✅ LƯU RESPONSE CODE
+                    ResponseCode = responseCode
                 };
 
                 _createdTransactions.Add(info);
@@ -877,14 +863,9 @@ RESPONSE: {healthResponse.StatusCode}
                     _createdTransactions.RemoveAt(0);
                 }
 
-                if (isPaid)
-                {
-                    Console.WriteLine($"✅ Transaction PAID: {partnerRef} (TransactionRef: {transactionRef})");
-                }
-                else
-                {
-                    Console.WriteLine($"⏳ Transaction PENDING: {partnerRef} (TransactionRef: {transactionRef ?? "null"})");
-                }
+                Console.WriteLine(isPaid
+                    ? $"✅ Transaction PAID: {partnerRef} (TransactionRef: {transactionRef})"
+                    : $"⏳ Transaction PENDING: {partnerRef} (TransactionRef: {transactionRef ?? "null"})");
             }
             catch (Exception ex)
             {
@@ -958,75 +939,151 @@ RESPONSE: {healthResponse.StatusCode}
                 ["serviceType"] = serviceType
             };
 
-            var paymentInfo = new Dictionary<string, object>
+            // PHẦN PAYMENT INFO
+            var paymentInfo = new Dictionary<string, object?>
             {
                 ["debtAmount"] = amount,
                 ["debtCurrency"] = currency,
                 ["disbursementAmount"] = amount,
                 ["disbursementCurrency"] = currency
             };
-            if (FieldSelected("paymentInfo.exchangeRate")) paymentInfo["exchangeRate"] = "1.0";
-            if (FieldSelected("paymentInfo.feeAmount")) paymentInfo["feeAmount"] = fee;
-            if (FieldSelected("paymentInfo.feeCurrency")) paymentInfo["feeCurrency"] = currency;
+
+            // ✅ SỬ DỤNG ShouldAddField
+            if (ShouldAddField("paymentInfo.exchangeRate", out var exRate))
+                paymentInfo["exchangeRate"] = exRate ?? "1.0";  // Use null if SendNull, else use "1.0"
+
+            if (ShouldAddField("paymentInfo.feeAmount", out var feeAmt))
+                paymentInfo["feeAmount"] = feeAmt ?? fee;
+
+            if (ShouldAddField("paymentInfo.feeCurrency", out var feeCur))
+                paymentInfo["feeCurrency"] = feeCur ?? currency;
+
             root["paymentInfo"] = paymentInfo;
 
-            var senderInfo = new Dictionary<string, object>
+            // PHẦN SENDER INFO
+            var senderInfo = new Dictionary<string, object?>
             {
-                ["fullName"] = senderName
+                ["fullName"] = senderName  // Required field - always send
             };
-            if (FieldSelected("senderInfo.phoneNumber")) senderInfo["phoneNumber"] = phone;
-            if (FieldSelected("senderInfo.documentType")) senderInfo["documentType"] = "ID";
-            if (FieldSelected("senderInfo.idNumber")) senderInfo["idNumber"] = idNumber;
-            if (FieldSelected("senderInfo.issueDate")) senderInfo["issueDate"] = RandomDate(2020, 2023);
-            if (FieldSelected("senderInfo.issuer")) senderInfo["issuer"] = "Gov";
-            if (FieldSelected("senderInfo.nationality")) senderInfo["nationality"] = _countries[rnd.Next(_countries.Count)];
-            if (FieldSelected("senderInfo.gender")) senderInfo["gender"] = rnd.Next(2) == 0 ? "M" : "F";
-            if (FieldSelected("senderInfo.doB")) senderInfo["doB"] = RandomDate(1970, 2000);
-            if (FieldSelected("senderInfo.address")) senderInfo["address"] = "Address " + GenerateRandomNumber(3);
-            if (FieldSelected("senderInfo.country")) senderInfo["country"] = _countries[rnd.Next(_countries.Count)];
-            if (FieldSelected("senderInfo.transferPurpose")) senderInfo["transferPurpose"] = "Gift";
-            if (FieldSelected("senderInfo.fundSource")) senderInfo["fundSource"] = "Salary";
-            if (FieldSelected("senderInfo.recipientRelationship")) senderInfo["recipientRelationship"] = "Friend";
-            if (FieldSelected("senderInfo.content")) senderInfo["content"] = "Transfer money";
+
+            if (ShouldAddField("senderInfo.phoneNumber", out var sPhone))
+                senderInfo["phoneNumber"] = sPhone ?? phone;
+
+            if (ShouldAddField("senderInfo.documentType", out var sDocType))
+                senderInfo["documentType"] = sDocType ?? "ID";
+
+            if (ShouldAddField("senderInfo.idNumber", out var sIdNum))
+                senderInfo["idNumber"] = sIdNum ?? idNumber;
+
+            if (ShouldAddField("senderInfo.issueDate", out var sIssueDate))
+                senderInfo["issueDate"] = sIssueDate ?? RandomDate(2020, 2023);
+
+            if (ShouldAddField("senderInfo.issuer", out var sIssuer))
+                senderInfo["issuer"] = sIssuer ?? "Gov";
+
+            if (ShouldAddField("senderInfo.nationality", out var sNation))
+                senderInfo["nationality"] = sNation ?? (_countries.Count > 0 ? _countries[rnd.Next(_countries.Count)] : "VN");
+
+            if (ShouldAddField("senderInfo.gender", out var sGender))
+                senderInfo["gender"] = sGender ?? (rnd.Next(2) == 0 ? "M" : "F");
+
+            if (ShouldAddField("senderInfo.doB", out var sDoB))
+                senderInfo["doB"] = sDoB ?? RandomDate(1970, 2000);
+
+            if (ShouldAddField("senderInfo.address", out var sAddr))
+                senderInfo["address"] = sAddr ?? ("Address " + GenerateRandomNumber(3));
+
+            if (ShouldAddField("senderInfo.country", out var sCountry))
+                senderInfo["country"] = sCountry ?? (_countries.Count > 0 ? _countries[rnd.Next(_countries.Count)] : "VN");
+
+            if (ShouldAddField("senderInfo.transferPurpose", out var sPurpose))
+                senderInfo["transferPurpose"] = sPurpose ?? "Gift";
+
+            if (ShouldAddField("senderInfo.fundSource", out var sFund))
+                senderInfo["fundSource"] = sFund ?? "Salary";
+
+            if (ShouldAddField("senderInfo.recipientRelationship", out var sRel))
+                senderInfo["recipientRelationship"] = sRel ?? "Friend";
+
+            if (ShouldAddField("senderInfo.content", out var sContent))
+                senderInfo["content"] = sContent ?? "Transfer money";
+
             root["senderInfo"] = senderInfo;
 
-            var receiverInfo = new Dictionary<string, object>
+            // PHẦN RECEIVER INFO
+            var receiverInfo = new Dictionary<string, object?>
             {
-                ["fullName"] = receiverName,
-                ["phoneNumber"] = phone,
-                ["documentType"] = "CCCD"
+                ["fullName"] = receiverName,     // Required
+                ["phoneNumber"] = phone,          // Required
+                ["documentType"] = "CCCD"         // Required
             };
-            if (FieldSelected("receiverInfo.address")) receiverInfo["address"] = "Address " + GenerateRandomNumber(3);
-            if (FieldSelected("receiverInfo.fullName2")) receiverInfo["fullName2"] = GenerateRandomName();
-            if (FieldSelected("receiverInfo.phoneNumber2")) receiverInfo["phoneNumber2"] = "09" + GenerateRandomNumber(8);
-            if (FieldSelected("receiverInfo.address2")) receiverInfo["address2"] = "Address2 " + GenerateRandomNumber(3);
-            if (FieldSelected("receiverInfo.idNumber")) receiverInfo["idNumber"] = idNumber;
-            if (FieldSelected("receiverInfo.issueDate")) receiverInfo["issueDate"] = RandomDate(2020, 2023);
-            if (FieldSelected("receiverInfo.issuer")) receiverInfo["issuer"] = "Gov";
-            if (FieldSelected("receiverInfo.nationality")) receiverInfo["nationality"] = "VN";
-            if (FieldSelected("receiverInfo.gender")) receiverInfo["gender"] = rnd.Next(2) == 0 ? "M" : "F";
-            if (FieldSelected("receiverInfo.doB")) receiverInfo["doB"] = RandomDate(1985, 2005);
-            if (FieldSelected("receiverInfo.ethnicity")) receiverInfo["ethnicity"] = "Kinh";
-            if (FieldSelected("receiverInfo.occupation")) receiverInfo["occupation"] = "Engineer";
-            if (FieldSelected("receiverInfo.province")) receiverInfo["province"] = province;
-            if (FieldSelected("receiverInfo.ward")) receiverInfo["ward"] = ward;
-            if (FieldSelected("receiverInfo.transferPurpose")) receiverInfo["transferPurpose"] = "Gift";
-            if (FieldSelected("receiverInfo.senderRelationship")) receiverInfo["senderRelationship"] = "Friend";
-            if (FieldSelected("receiverInfo.accountNumber")) receiverInfo["accountNumber"] = accNumber;
-            if (FieldSelected("receiverInfo.bankCode")) receiverInfo["bankCode"] = bankCode;
-            if (FieldSelected("receiverInfo.bankBranchCode")) receiverInfo["bankBranchCode"] = bankBranch;
+
+            if (ShouldAddField("receiverInfo.address", out var rAddr))
+                receiverInfo["address"] = rAddr ?? ("Address " + GenerateRandomNumber(3));
+
+            if (ShouldAddField("receiverInfo.fullName2", out var rName2))
+                receiverInfo["fullName2"] = rName2 ?? GenerateRandomName();
+
+            if (ShouldAddField("receiverInfo.phoneNumber2", out var rPhone2))
+                receiverInfo["phoneNumber2"] = rPhone2 ?? ("09" + GenerateRandomNumber(8));
+
+            if (ShouldAddField("receiverInfo.address2", out var rAddr2))
+                receiverInfo["address2"] = rAddr2 ?? ("Address2 " + GenerateRandomNumber(3));
+
+            if (ShouldAddField("receiverInfo.idNumber", out var rIdNum))
+                receiverInfo["idNumber"] = rIdNum ?? idNumber;
+
+            if (ShouldAddField("receiverInfo.issueDate", out var rIssueDate))
+                receiverInfo["issueDate"] = rIssueDate ?? RandomDate(2020, 2023);
+
+            if (ShouldAddField("receiverInfo.issuer", out var rIssuer))
+                receiverInfo["issuer"] = rIssuer ?? "Gov";
+
+            if (ShouldAddField("receiverInfo.nationality", out var rNation))
+                receiverInfo["nationality"] = rNation ?? "VN";
+
+            if (ShouldAddField("receiverInfo.gender", out var rGender))
+                receiverInfo["gender"] = rGender ?? (rnd.Next(2) == 0 ? "M" : "F");
+
+            if (ShouldAddField("receiverInfo.doB", out var rDoB))
+                receiverInfo["doB"] = rDoB ?? RandomDate(1985, 2005);
+
+            if (ShouldAddField("receiverInfo.ethnicity", out var rEth))
+                receiverInfo["ethnicity"] = rEth ?? "Kinh";
+
+            if (ShouldAddField("receiverInfo.occupation", out var rOcc))
+                receiverInfo["occupation"] = rOcc ?? "Engineer";
+
+            if (ShouldAddField("receiverInfo.province", out var rProv))
+                receiverInfo["province"] = rProv ?? province;
+
+            if (ShouldAddField("receiverInfo.ward", out var rWard))
+                receiverInfo["ward"] = rWard ?? ward;
+
+            if (ShouldAddField("receiverInfo.transferPurpose", out var rPurpose))
+                receiverInfo["transferPurpose"] = rPurpose ?? "Gift";
+
+            if (ShouldAddField("receiverInfo.senderRelationship", out var rSenderRel))
+                receiverInfo["senderRelationship"] = rSenderRel ?? "Friend";
+
+            if (ShouldAddField("receiverInfo.accountNumber", out var rAcc))
+                receiverInfo["accountNumber"] = rAcc ?? accNumber;
+
+            if (ShouldAddField("receiverInfo.bankCode", out var rBank))
+                receiverInfo["bankCode"] = rBank ?? bankCode;
+
+            if (ShouldAddField("receiverInfo.bankBranchCode", out var rBranch))
+                receiverInfo["bankBranchCode"] = rBranch ?? bankBranch;
+
             root["receiverInfo"] = receiverInfo;
 
+            // ✅ Serialize với option để giữ null values
             return JsonSerializer.Serialize(root, new JsonSerializerOptions
             {
                 WriteIndented = true,
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never // Quan trọng!
             });
-        }
-
-        private bool FieldSelected(string field)
-        {
-            return _fieldsConfig?.SelectedFields?.Contains(field) ?? false;
         }
 
         private string CreateAcctInqRequest(string partnerCode)
@@ -1055,38 +1112,30 @@ RESPONSE: {healthResponse.StatusCode}
             });
         }
 
-        private string CreateCancelTransRequest(string partnerCode, string agencyCode)
+        private string? CreateCancelTransRequest(string partnerCode, string agencyCode)
         {
             string partnerRef = "";
             string pin = "";
 
-            // ✅ CHỈ LẤY GIAO DỊCH: 
-            // - Cùng partnerCode
-            // - Chưa PAID
-            // - Chưa CANCELLED  
-            // - ResponseCode != "99" (không vào hệ thống)
             var availableTransactions = _createdTransactions
                 .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode != "00"&&
-                            t.ResponseCode != "99")
+                            t.ResponseCode == "05")
                 .ToList();
 
             if (availableTransactions.Count > 0)
             {
                 var trans = availableTransactions[rnd.Next(availableTransactions.Count)];
                 partnerRef = trans.PartnerRef;
-                //pin = "PIN-" + agencyCode + GenerateRandomNumber(6);
 
                 Console.WriteLine($"📤 Cancel request for available transaction: {partnerRef}");
             }
             else
             {
-                // ✅ KHÔNG RANDOM - BÁO LỖI
                 AppendResult($"[ERROR] ⚠️ Không có giao dịch khả dụng để cancel cho partner {partnerCode}\r\n");
                 Console.WriteLine($"⚠️ No available transactions for partner {partnerCode}");
-                return null; // Trả về null để không gửi request
+                return null; // Return null properly
             }
 
             var root = new Dictionary<string, object>
@@ -1138,7 +1187,7 @@ RESPONSE: {healthResponse.StatusCode}
             }
             else
             {
-                partnerRef =  GenerateRandomNumber(6);
+                partnerRef = GenerateRandomNumber(6);
                 pin = GenerateRandomNumber(6);
             }
 
@@ -1157,18 +1206,16 @@ RESPONSE: {healthResponse.StatusCode}
             });
         }
 
-        private string CreateUpdateTransRequest(string partnerCode, string agencyCode)
+        private string? CreateUpdateTransRequest(string partnerCode, string agencyCode)
         {
             string partnerRef = "";
             string pin = "";
 
-            // ✅ CHỈ LẤY GIAO DỊCH: cùng partner, chưa paid, chưa cancelled, responseCode != "99"
             var availableTransactions = _createdTransactions
                 .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode != "00" &&
-                            t.ResponseCode != "99")
+                            t.ResponseCode == "05")
                 .ToList();
 
             if (availableTransactions.Count > 0)
@@ -1181,7 +1228,6 @@ RESPONSE: {healthResponse.StatusCode}
             }
             else
             {
-                // ✅ KHÔNG RANDOM - BÁO LỖI
                 AppendResult($"[ERROR] ⚠️ Không có giao dịch khả dụng để update cho partner {partnerCode}\r\n");
                 Console.WriteLine($"⚠️ No available transactions for partner {partnerCode}");
                 return null;
@@ -1294,7 +1340,7 @@ RESPONSE: {healthResponse.StatusCode}
             var paidTrans = _createdTransactions.Where(t => t.IsPaid).ToList();
             var cancelledTrans = _createdTransactions.Where(t => t.IsCancelled).ToList();
             var error99Trans = _createdTransactions.Where(t => t.ResponseCode == "99").ToList();
-            var availableTrans = _createdTransactions.Where(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode != "99").ToList();
+            var availableTrans = _createdTransactions.Where(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05").ToList();
 
             sb.AppendLine($"💰 PAID TRANSACTIONS ({paidTrans.Count}):");
             sb.AppendLine("=".PadRight(70, '='));
@@ -1373,7 +1419,7 @@ RESPONSE: {healthResponse.StatusCode}
         }
 
         private void WriteApiLog(string endpoint, string status, int duration,
-     string responseCode, string error, string requestJson, string responseJson)
+    string responseCode, string error, string requestJson, string responseJson)
         {
             try
             {
@@ -1390,8 +1436,8 @@ RESPONSE: {healthResponse.StatusCode}
                 string transactionRef = "";
                 string transactionStatus = "";
 
-                // ✅ XỬ LÝ CHO TRANSFER - PAID MARKER
-                if (endpoint.ToUpper() == "TRANSFER" && responseCode == "00")
+                // ✅ XỬ LÝ CHO TRANSFER
+                if (endpoint.ToUpper() == "TRANSFER" )
                 {
                     try
                     {
@@ -1418,13 +1464,14 @@ RESPONSE: {healthResponse.StatusCode}
                         }
                         else
                         {
+                            statusMarker = "⏳ PENDING";
                             transactionStatus = "PENDING";
                         }
                     }
                     catch { }
                 }
 
-                // ✅ XỬ LÝ CHO CANCELTRANS - CANCELLED MARKER
+                // ✅ XỬ LÝ CHO CANCELTRANS
                 if (endpoint.ToUpper() == "CANCELTRANS" && responseCode == "00")
                 {
                     try
@@ -1440,16 +1487,19 @@ RESPONSE: {healthResponse.StatusCode}
                             partnerRef = prProp.GetString();
                         }
 
-                        if (apiStatus == "200")
+                        if (apiStatus == "500")
                         {
                             statusMarker = "🚫 CANCELLED";
                             transactionStatus = "CANCELLED";
+
+                            // ✅ UPDATE LOG FILE - Tìm và cập nhật PENDING thành CANCELLED
+                            UpdatePendingToCancelled(logPath, partnerRef);
                         }
                     }
                     catch { }
                 }
 
-                // ✅ XỬ LÝ CHO TRANSINQ - XÁC ĐỊNH TRANSACTION STATUS
+                // ✅ XỬ LÝ CHO TRANSINQ
                 if (endpoint.ToUpper() == "TRANSINQ" && responseCode == "00")
                 {
                     try
@@ -1466,7 +1516,7 @@ RESPONSE: {healthResponse.StatusCode}
                             transactionRef = trProp.GetString();
                         }
 
-                        // ✅ TÌM TRANSACTION STATUS TỪ MEMORY
+                        // Tìm transaction status từ memory
                         var transaction = _createdTransactions.FirstOrDefault(t => t.PartnerRef == partnerRef);
                         if (transaction != null)
                         {
@@ -1490,32 +1540,31 @@ RESPONSE: {healthResponse.StatusCode}
                     catch { }
                 }
 
+                // ✅ HEADER LOG - Format chuẩn
                 sb.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] - {endpoint.ToUpper()} {statusMarker}");
                 sb.AppendLine($"Status: {status}");
                 sb.AppendLine($"Duration: {duration} ms");
                 sb.AppendLine($"ResponseCode: {responseCode}");
 
-                // ✅ THÔNG TIN CHO PAID
-                if (statusMarker == "💰 PAID")
+                // ✅ THÔNG TIN TRANSACTION
+                if (!string.IsNullOrEmpty(partnerRef))
                 {
-                    sb.AppendLine($"🔒 Transaction PAID - PartnerRef: {partnerRef}");
-                    sb.AppendLine($"🆔 TransactionRef: {transactionRef}");
+                    sb.AppendLine($"PartnerRef: {partnerRef}");
                 }
 
-                // ✅ THÔNG TIN CHO CANCELLED
-                if (statusMarker == "🚫 CANCELLED")
+                if (!string.IsNullOrEmpty(transactionRef))
                 {
-                    sb.AppendLine($"❌ Transaction CANCELLED - PartnerRef: {partnerRef}");
+                    sb.AppendLine($"TransactionRef: {transactionRef}");
                 }
 
-                // ✅ THÔNG TIN CHO PENDING (TRANSINQ)
-                if (statusMarker == "⏳ PENDING")
+                if (!string.IsNullOrEmpty(transactionStatus))
                 {
-                    sb.AppendLine($"⏳ Transaction PENDING - PartnerRef: {partnerRef}");
+                    sb.AppendLine($"TransactionStatus: {transactionStatus}");
                 }
 
                 if (!string.IsNullOrEmpty(error))
                     sb.AppendLine($"Error: {error}");
+
                 sb.AppendLine("REQUEST:");
                 sb.AppendLine(string.IsNullOrWhiteSpace(requestJson) ? "No data" : requestJson);
                 sb.AppendLine("RESPONSE:");
@@ -1527,8 +1576,133 @@ RESPONSE: {healthResponse.StatusCode}
             }
             catch { }
         }
-        
-        
+        private void UpdatePendingToCancelled(string logPath, string partnerRef)
+        {
+            try
+            {
+                if (!File.Exists(logPath) || string.IsNullOrEmpty(partnerRef))
+                    return;
+
+                string content = File.ReadAllText(logPath, Encoding.UTF8);
+
+                // Split by log separator
+                var blocks = content.Split(new[] { "----------------------------------------------------" },
+                    StringSplitOptions.None);
+
+                var updatedBlocks = new List<string>();
+                bool hasUpdate = false;
+
+                foreach (var block in blocks)
+                {
+                    if (string.IsNullOrWhiteSpace(block))
+                    {
+                        updatedBlocks.Add(block);
+                        continue;
+                    }
+
+                    // Kiểm tra block có chứa TRANSFER với partnerRef này không
+                    if (block.Contains("TRANSFER") &&
+                        !block.Contains("UPDATETRANS") &&
+                        block.Contains($"\"partnerRef\": \"{partnerRef}\""))
+                    {
+                        var lines = block.Split('\n').ToList();
+                        var updatedLines = new List<string>();
+                        bool foundHeader = false;
+                        bool addedCancelInfo = false;
+
+                        foreach (var line in lines)
+                        {
+                            // Update header line nếu là TRANSFER (không phải PAID)
+                            if (!foundHeader && line.Contains("] - TRANSFER") && !line.Contains("PAID"))
+                            {
+                                // Thay thế hoặc thêm marker CANCELLED
+                                if (line.Contains("⏳ PENDING"))
+                                {
+                                    updatedLines.Add(line.Replace("⏳ PENDING", "🚫 CANCELLED"));
+                                }
+                                else if (!line.Contains("CANCELLED"))
+                                {
+                                    updatedLines.Add(line.TrimEnd() + " 🚫 CANCELLED");
+                                }
+                                else
+                                {
+                                    updatedLines.Add(line);
+                                }
+                                foundHeader = true;
+                            }
+                            // Thêm Transaction Status sau ResponseCode nếu chưa có
+                            else if (line.StartsWith("ResponseCode:") && !addedCancelInfo)
+                            {
+                                updatedLines.Add(line);
+
+                                // Kiểm tra xem dòng tiếp theo đã có PartnerRef chưa
+                                bool hasPartnerRef = false;
+                                bool hasTransactionStatus = false;
+
+                                for (int i = lines.IndexOf(line) + 1; i < lines.Count; i++)
+                                {
+                                    if (lines[i].StartsWith("PartnerRef:"))
+                                        hasPartnerRef = true;
+                                    if (lines[i].StartsWith("TransactionStatus:"))
+                                        hasTransactionStatus = true;
+                                    if (lines[i].StartsWith("REQUEST:"))
+                                        break;
+                                }
+
+                                if (!hasPartnerRef)
+                                {
+                                    updatedLines.Add($"PartnerRef: {partnerRef}");
+                                }
+
+                                if (!hasTransactionStatus)
+                                {
+                                    updatedLines.Add("TransactionStatus: CANCELLED");
+                                }
+
+                                addedCancelInfo = true;
+                            }
+                            // Update existing TransactionStatus
+                            else if (line.StartsWith("TransactionStatus:") &&
+                                     (line.Contains("PENDING") || !line.Contains("CANCELLED")))
+                            {
+                                updatedLines.Add("TransactionStatus: CANCELLED");
+                            }
+                            else
+                            {
+                                updatedLines.Add(line);
+                            }
+                        }
+
+                        if (foundHeader)
+                        {
+                            updatedBlocks.Add(string.Join("\n", updatedLines));
+                            hasUpdate = true;
+                        }
+                        else
+                        {
+                            updatedBlocks.Add(block);
+                        }
+                    }
+                    else
+                    {
+                        updatedBlocks.Add(block);
+                    }
+                }
+
+                if (hasUpdate)
+                {
+                    // Rebuild content với separator
+                    string updatedContent = string.Join("----------------------------------------------------", updatedBlocks);
+                    File.WriteAllText(logPath, updatedContent, Encoding.UTF8);
+
+                    AppendResult($"[LOG UPDATE] ✅ Updated PENDING → CANCELLED for PartnerRef: {partnerRef}\r\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[LOG UPDATE ERROR] ❌ {ex.Message}\r\n");
+            }
+        }
         private async void btnAutoTest_Click(object sender, EventArgs e)
         {
             if (_isAutoTesting)
@@ -1550,7 +1724,7 @@ RESPONSE: {healthResponse.StatusCode}
                 MessageBox.Show("Vui lòng nhập Agency Code");
                 return;
             }
-            
+
             _isAutoTesting = true;
             _autoTestStep = 1;
             btnAutoTest.Text = "⏸️ Stop Auto Test";
@@ -1594,7 +1768,7 @@ RESPONSE: {healthResponse.StatusCode}
                 AppendResult("[STEP 1] 🏥 Testing HEALTHCHECK (max 5 success calls)...\r\n");
                 int healthAttempts = 0;
 
-                while ( healthAttempts < 10 && _isAutoTesting)
+                while (healthAttempts < 10 && _isAutoTesting)
                 {
                     healthAttempts++;
                     bool isSuccess = await SendHealthCheckRequest(partnerCode, agencyCode, healthAttempts);
@@ -1633,8 +1807,7 @@ RESPONSE: {healthResponse.StatusCode}
 
                     // Kiểm tra số pending (không paid, không cancelled)
                     var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
-                            t.ResponseCode != "00" &&
-                            t.ResponseCode != "99");
+                            t.ResponseCode != "05");
                     if (pendingCount >= 5)
                     {
                         // Đã đủ 5 giao dịch chưa paid, chưa cancel thì dừng
@@ -1642,7 +1815,8 @@ RESPONSE: {healthResponse.StatusCode}
                     }
                 }
 
-                var finalPending = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled);
+                var finalPending = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
+                            t.ResponseCode == "05");
                 AppendResult($"[STEP 2] ✅ TRANSFER completed: {transferCount} transfers, {finalPending} pending\r\n\r\n");
                 if (!_isAutoTesting) return;
 
@@ -1650,7 +1824,7 @@ RESPONSE: {healthResponse.StatusCode}
                 // STEP 3: QUERYINFOR - Gọi tất cả currencies (tối đa 10)
                 // ======================================================================
                 AppendResult("[STEP 3] 💰 Testing QUERYINFOR (all currencies, max 10)...\r\n");
-                string[] currencies = { "VND", "USD", "EUR", "JPY", "AUD", "CAD"};
+                string[] currencies = { "VND", "USD", "EUR", "JPY", "AUD", "CAD" };
                 int queryCount = 0;
 
                 foreach (var currency in currencies.Take(5))
@@ -1683,20 +1857,6 @@ RESPONSE: {healthResponse.StatusCode}
                 for (int i = 0; i < cancelTarget; i++)
                 {
                     if (!_isAutoTesting) break;
-
-               //     var availablePending = _createdTransactions
-               //         .Where(t => t.PartnerCode == partnerCode &&
-               //            !t.IsPaid &&
-               //            !t.IsCancelled &&
-               //            t.ResponseCode != "00" &&
-               //            t.ResponseCode != "99")
-               //.ToList();
-               
-               //     if (availablePending.Count == 0)
-               //     {
-               //         AppendResult($"[STEP 4] ⚠️ Hết giao dịch pending để cancel sau {cancelCount} attempts\r\n");
-               //         break;
-               //     }
 
                     await SendApiRequest("canceltrans", partnerCode, agencyCode, i + 1);
                     cancelCount++;
@@ -1754,8 +1914,7 @@ RESPONSE: {healthResponse.StatusCode}
                     .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode != "00" &&
-                            t.ResponseCode != "99")
+                            t.ResponseCode == "05")
                     .Take(3)
                     .ToList();
                 AppendResult($"[STEP 6.3] Testing {pendingTrans.Count} PENDING transactions...\r\n");
@@ -1959,7 +2118,7 @@ RESPONSE: {healthResponse.StatusCode}
             var paidTransactions = _createdTransactions.Count(t => t.IsPaid);
             var cancelledTransactions = _createdTransactions.Count(t => t.IsCancelled);
             var error99Transactions = _createdTransactions.Count(t => t.ResponseCode == "99");
-            var availableTransactions = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode != "99");
+            var availableTransactions = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05");
 
             var statsText = $@"
 ╔══════════════════════════════════════════╗
@@ -1977,13 +2136,13 @@ RESPONSE: {healthResponse.StatusCode}
         }
         public class TransactionInfo
         {
-            public string RefNo { get; set; }
-            public string PartnerRef { get; set; }
-            public string PartnerCode { get; set; }
-            public string TransactionRef { get; set; }
+            public string RefNo { get; set; } = string.Empty;
+            public string PartnerRef { get; set; } = string.Empty;
+            public string PartnerCode { get; set; } = string.Empty;
+            public string? TransactionRef { get; set; } // Nullable
             public bool IsPaid { get; set; }
             public bool IsCancelled { get; set; }
-            public string ResponseCode { get; set; }  // ✅ THÊM MỚI
+            public string ResponseCode { get; set; } = "00";
             public DateTime CreatedAt { get; set; }
 
             public TransactionInfo()
@@ -1991,9 +2150,66 @@ RESPONSE: {healthResponse.StatusCode}
                 CreatedAt = DateTime.Now;
                 IsPaid = false;
                 IsCancelled = false;
-                ResponseCode = "00";  // ✅ DEFAULT
             }
         }
-    }
 
+        // ✅ THÊM HELPER METHOD VÀO CLASS Form3
+        // Đặt ngay sau khai báo biến _fieldsConfig
+
+        /// <summary>
+        /// Kiểm tra xem field có nên được thêm vào request không, dựa trên FieldMode
+        /// </summary>
+        /// <param name="fieldName">Tên field (vd: "senderInfo.phoneNumber")</param>
+        /// <param name="fieldValue">Output: giá trị của field (null nếu SendNull mode)</param>
+        /// <returns>true nếu field nên được add, false nếu không (NotSend hoặc unchecked)</returns>
+        private bool ShouldAddField(string fieldName, out object fieldValue)
+        {
+            fieldValue = null;
+
+            // Kiểm tra field có được chọn không
+            if (_fieldsConfig?.SelectedFields == null || !_fieldsConfig.SelectedFields.Contains(fieldName))
+                return false;
+
+            // Kiểm tra field mode
+            if (_fieldsConfig.FieldModes != null && _fieldsConfig.FieldModes.TryGetValue(fieldName, out var mode))
+            {
+                switch (mode)
+                {
+                    case FieldMode.SendNull:
+                        fieldValue = null;
+                        return true;
+
+                    case FieldMode.NotSend:
+                        return false;
+
+                    case FieldMode.Normal:
+                    default:
+                        // Sẽ generate data ở caller
+                        return true;
+                }
+            }
+
+            // Default: Normal mode
+            return true;
+        }
+        /// <summary>
+        /// Helper to check if field should be added (without out parameter)
+        /// </summary>
+        private bool FieldSelected(string field)
+        {
+            return _fieldsConfig?.SelectedFields?.Contains(field) ?? false;
+        }
+
+        private void txtPartnerCode_TextChanged(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.PartnerCode = txtPartnerCode.Text;
+            Properties.Settings.Default.Save();
+        }
+
+        private void txtAgencyCode_TextChanged(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.AgencyCode = txtAgencyCode.Text;
+            Properties.Settings.Default.Save();
+        }
+    }
     };

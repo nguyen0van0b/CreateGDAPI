@@ -7,11 +7,6 @@ using System.Windows.Forms;
 
 namespace CreateGDAPI
 {
-    public class FieldsConfig
-    {
-        public List<string> SelectedFields { get; set; } = new();
-        public bool UseBlackListOnly { get; set; } = false;
-    }
 
     public partial class FormSettings : Form
     {
@@ -22,7 +17,7 @@ namespace CreateGDAPI
             InitializeComponent();
         }
 
-        private void FormSettings_Load(object sender, EventArgs e)
+        private void FormSetting_Load(object sender, EventArgs e)
         {
             // Thêm tất cả các fields vào CheckedListBox
             chkFields.Items.AddRange(new string[]
@@ -70,10 +65,92 @@ namespace CreateGDAPI
                 "receiverInfo.bankBranchCode"
             });
 
+            // Setup combo Field Mode
+            comboFieldMode.Items.AddRange(new object[]
+            {
+                "Normal (Random Data)",
+                "Send Null",
+                "Do Not Send"
+            });
+            comboFieldMode.SelectedIndex = 0;
+
             // Load cấu hình đã lưu
             LoadConfig();
-        }
 
+            // Subscribe events
+            chkFields.SelectedIndexChanged += ChkFields_SelectedIndexChanged;
+            comboFieldMode.SelectedIndexChanged += ComboFieldMode_SelectedIndexChanged;
+        }
+        private void ChkFields_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (chkFields.SelectedItem == null)
+            {
+                comboFieldMode.Enabled = false;
+                return;
+            }
+
+            comboFieldMode.Enabled = true;
+            string selectedField = chkFields.SelectedItem.ToString();
+
+            var config = LoadConfigInternal();
+
+            if (config.FieldModes.ContainsKey(selectedField))
+            {
+                comboFieldMode.SelectedIndex = (int)config.FieldModes[selectedField];
+            }
+            else
+            {
+                comboFieldMode.SelectedIndex = 0; // Default: Normal
+            }
+
+            lblFieldModeInfo.Text = $"Mode for: {selectedField}";
+        }
+        private void ComboFieldMode_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (chkFields.SelectedItem == null) return;
+
+            string selectedField = chkFields.SelectedItem.ToString();
+            var config = LoadConfigInternal();
+
+            config.FieldModes[selectedField] = (FieldMode)comboFieldMode.SelectedIndex;
+
+            SaveConfigInternal(config);
+
+            string modeName = comboFieldMode.SelectedItem.ToString();
+            lblStatus.Text = $"✅ Updated: {selectedField} → {modeName}";
+            lblStatus.ForeColor = System.Drawing.Color.Green;
+        }
+        private FieldsConfig LoadConfigInternal()
+        {
+            if (!File.Exists(configPath))
+                return new FieldsConfig();
+
+            try
+            {
+                string json = File.ReadAllText(configPath);
+                return JsonSerializer.Deserialize<FieldsConfig>(json) ?? new FieldsConfig();
+            }
+            catch
+            {
+                return new FieldsConfig();
+            }
+        }
+        private void SaveConfigInternal(FieldsConfig config)
+        {
+            try
+            {
+                string json = JsonSerializer.Serialize(config, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                File.WriteAllText(configPath, json);
+            }
+            catch
+            {
+                // Ignore errors
+            }
+        }
         private void LoadConfig()
         {
             if (!File.Exists(configPath))
@@ -125,6 +202,10 @@ namespace CreateGDAPI
                 {
                     config.SelectedFields.Add(item.ToString());
                 }
+
+                // Preserve field modes
+                var currentConfig = LoadConfigInternal();
+                config.FieldModes = currentConfig.FieldModes;
 
                 string json = JsonSerializer.Serialize(config, new JsonSerializerOptions
                 {
@@ -211,10 +292,8 @@ namespace CreateGDAPI
 
             if (!File.Exists(configPath))
             {
-                // Trả về config mặc định: tất cả fields được chọn
                 var defaultConfig = new FieldsConfig { UseBlackListOnly = false };
 
-                // Add all fields
                 string[] allFields = new string[]
                 {
                     "paymentInfo.exchangeRate","paymentInfo.feeAmount","paymentInfo.feeCurrency",
@@ -260,19 +339,23 @@ namespace CreateGDAPI
 
         private void btnResetDefault_Click(object sender, EventArgs e)
         {
-            if (MessageBox.Show("Bạn có chắc muốn reset về cấu hình mặc định (chọn tất cả)?",
+            if (MessageBox.Show("Bạn có chắc muốn reset về cấu hình mặc định?\n(Chọn tất cả fields, mode Normal, tắt BlackList)",
                 "Xác nhận",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning) == DialogResult.Yes)
             {
-                // Select all fields
                 for (int i = 0; i < chkFields.Items.Count; i++)
                 {
                     chkFields.SetItemChecked(i, true);
                 }
 
-                // Uncheck blacklist
                 chkUseBlackListOnly.Checked = false;
+
+                // Reset all field modes to Normal
+                var config = new FieldsConfig();
+                SaveConfigInternal(config);
+
+                comboFieldMode.SelectedIndex = 0;
 
                 lblStatus.Text = "✅ Đã reset về cấu hình mặc định";
                 lblStatus.ForeColor = System.Drawing.Color.Green;
@@ -285,21 +368,18 @@ namespace CreateGDAPI
 
             if (string.IsNullOrEmpty(searchText))
             {
-                // Hiển thị lại tất cả
                 chkFields.Items.Clear();
                 chkFields.Items.AddRange(GetAllFields());
-                LoadConfig(); // Restore checked state
+                LoadConfig();
                 return;
             }
 
-            // Filter items
             var allFields = GetAllFields();
             var filtered = allFields.Where(f => f.ToLower().Contains(searchText)).ToArray();
 
             chkFields.Items.Clear();
             chkFields.Items.AddRange(filtered);
 
-            // Restore checked state
             LoadConfig();
         }
 
@@ -320,6 +400,66 @@ namespace CreateGDAPI
                 "receiverInfo.transferPurpose","receiverInfo.senderRelationship",
                 "receiverInfo.accountNumber","receiverInfo.bankCode","receiverInfo.bankBranchCode"
             };
+        }
+
+        private void btnResetFieldModes_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Reset tất cả field modes về Normal?",
+                "Xác nhận",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                var config = LoadConfigInternal();
+                config.FieldModes.Clear();
+                SaveConfigInternal(config);
+
+                comboFieldMode.SelectedIndex = 0;
+
+                lblStatus.Text = "✅ Đã reset tất cả field modes về Normal";
+                lblStatus.ForeColor = System.Drawing.Color.Green;
+            }
+        }
+
+        private void btnSetAllNull_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Set tất cả checked fields về mode 'Send Null'?",
+                "Xác nhận",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                var config = LoadConfigInternal();
+
+                foreach (var item in chkFields.CheckedItems)
+                {
+                    config.FieldModes[item.ToString()] = FieldMode.SendNull;
+                }
+
+                SaveConfigInternal(config);
+
+                lblStatus.Text = "✅ Đã set tất cả checked fields → Send Null";
+                lblStatus.ForeColor = System.Drawing.Color.Green;
+            }
+        }
+
+        private void btnSetAllNotSend_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Set tất cả checked fields về mode 'Do Not Send'?",
+                "Xác nhận",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                var config = LoadConfigInternal();
+
+                foreach (var item in chkFields.CheckedItems)
+                {
+                    config.FieldModes[item.ToString()] = FieldMode.NotSend;
+                }
+
+                SaveConfigInternal(config);
+
+                lblStatus.Text = "✅ Đã set tất cả checked fields → Do Not Send";
+                lblStatus.ForeColor = System.Drawing.Color.Green;
+            }
         }
     }
 }

@@ -13,24 +13,24 @@ namespace CreateGDAPI
     public class ApiRequestLog
     {
         public DateTime Timestamp { get; set; }
-        public string Endpoint { get; set; }
-        public string ResponseCode { get; set; }
-        public string Status { get; set; }
+        public string Endpoint { get; set; } = string.Empty;
+        public string ResponseCode { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
         public int Duration { get; set; }
-        public string RefNo { get; set; }
-        public string PartnerRef { get; set; }
-        public string TransactionRef { get; set; }
+        public string RefNo { get; set; } = string.Empty;
+        public string PartnerRef { get; set; } = string.Empty;
+        public string? TransactionRef { get; set; } // Nullable
         public bool IsPaid { get; set; }
-        public bool IsCancelled { get; set; }  // ✅ THÊM MỚI
-        public string TransactionStatus { get; set; }  // ✅ THÊM: "PAID", "CANCELLED", "PENDING"
-        public string ErrorMessage { get; set; }
-        public string RequestJson { get; set; }
-        public string ResponseJson { get; set; }
+        public bool IsCancelled { get; set; }
+        public string TransactionStatus { get; set; } = string.Empty;
+        public string ErrorMessage { get; set; } = string.Empty;
+        public string RequestJson { get; set; } = string.Empty;
+        public string ResponseJson { get; set; } = string.Empty;
     }
 
     public class ApiStatistics
     {
-        public string Endpoint { get; set; }
+        public string Endpoint { get; set; } = string.Empty;
         public int TotalRequests { get; set; }
         public int SuccessCount { get; set; }
         public int FailedCount { get; set; }
@@ -139,108 +139,60 @@ namespace CreateGDAPI
                 bool isInResponse = false;
                 var requestBuilder = new StringBuilder();
                 var responseBuilder = new StringBuilder();
-                string responseCode = null;  // ✅ TRACK RESPONSE CODE
 
                 foreach (var line in lines)
                 {
-                    // ✅ EXTRACT RESPONSE CODE FIRST
-                    if (line.Contains("ResponseCode:"))
-                    {
-                        var parts = line.Split(':');
-                        if (parts.Length > 1)
-                        {
-                            responseCode = parts[1].Trim();
-                            log.ResponseCode = responseCode;
-                        }
-                    }
-
-                    // ✅ PARSE PAID MARKER
-                    if (line.Contains("💰 PAID"))
-                    {
-                        log.IsPaid = true;
-                        log.TransactionStatus = "PAID";
-                    }
-
-                    // ✅ PARSE CANCELLED MARKER
-                    if (line.Contains("🚫 CANCELLED"))
-                    {
-                        log.IsCancelled = true;
-                        log.TransactionStatus = "CANCELLED";
-                    }
-
-                    // ✅ CHECK FOR ERROR 99
-                    if (responseCode == "99")
-                    {
-                        log.TransactionStatus = "ERROR_99";
-                    }
-
-                    // ✅ PARSE PENDING MARKER (TRANSINQ)
-                    if (line.Contains("⏳ PENDING") || line.Contains("Transaction PENDING"))
-                    {
-                        // Only set PENDING if not ERROR_99
-                        if (responseCode != "99")
-                        {
-                            log.TransactionStatus = "PENDING";
-                        }
-                    }
-
-                    if (line.Contains("🔒 Transaction PAID - PartnerRef:"))
-                    {
-                        var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
-                        if (parts.Length > 1)
-                        {
-                            log.PartnerRef = parts[1].Trim();
-                        }
-                    }
-
-                    if (line.Contains("❌ Transaction CANCELLED - PartnerRef:"))
-                    {
-                        var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
-                        if (parts.Length > 1)
-                        {
-                            log.PartnerRef = parts[1].Trim();
-                        }
-                    }
-
-                    if (line.Contains("⏳ Transaction PENDING - PartnerRef:"))
-                    {
-                        var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
-                        if (parts.Length > 1)
-                        {
-                            log.PartnerRef = parts[1].Trim();
-                        }
-                    }
-
-                    if (line.Contains("🆔 TransactionRef:"))
-                    {
-                        var parts = line.Split(new[] { "TransactionRef:" }, StringSplitOptions.None);
-                        if (parts.Length > 1)
-                        {
-                            log.TransactionRef = parts[1].Trim();
-                        }
-                    }
-
+                    // ✅ PARSE HEADER LINE: [timestamp] - ENDPOINT STATUS
                     if (line.Contains("[") && line.Contains("]") && line.Contains(" - "))
                     {
+                        // Extract timestamp
+                        var timestampMatch = System.Text.RegularExpressions.Regex.Match(
+                            line, @"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]");
+                        if (timestampMatch.Success &&
+                            DateTime.TryParse(timestampMatch.Groups[1].Value, out var timestamp))
+                        {
+                            log.Timestamp = timestamp;
+                        }
+
+                        // Extract endpoint and status markers
                         var parts = line.Split(new[] { " - " }, StringSplitOptions.None);
                         if (parts.Length > 1)
                         {
-                            log.Endpoint = parts[1].Replace("💰 PAID", "")
-                                                  .Replace("🚫 CANCELLED", "")
-                                                  .Replace("⏳ PENDING", "")
-                                                  .Trim().ToUpper();
+                            string endpointPart = parts[1].Trim();
 
-                            var timestampMatch = System.Text.RegularExpressions.Regex.Match(
-                                line, @"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]");
-                            if (timestampMatch.Success &&
-                                DateTime.TryParse(timestampMatch.Groups[1].Value, out var timestamp))
+                            // Remove status markers to get clean endpoint name
+                            log.Endpoint = endpointPart
+                                .Replace("💰 PAID", "")
+                                .Replace("🚫 CANCELLED", "")
+                                .Replace("🚫 CANCELLED [UPDATED]", "")
+                                .Replace("⏳ PENDING", "")
+                                .Trim()
+                                .ToUpper();
+
+                            // Detect transaction status from markers
+                            if (endpointPart.Contains("💰 PAID"))
                             {
-                                log.Timestamp = timestamp;
+                                log.IsPaid = true;
+                                log.TransactionStatus = "PAID";
+                            }
+                            else if (endpointPart.Contains("🚫 CANCELLED"))
+                            {
+                                log.IsCancelled = true;
+                                log.TransactionStatus = "CANCELLED";
+                            }
+                            else if (endpointPart.Contains("⏳ PENDING"))
+                            {
+                                log.TransactionStatus = "PENDING";
                             }
                         }
                     }
 
-                    if (line.Contains("Duration:") && line.Contains("ms"))
+                    // ✅ PARSE STRUCTURED FIELDS
+                    if (line.StartsWith("Status:"))
+                    {
+                        log.Status = line.Split(':')[1].Trim();
+                    }
+                    else if (line.StartsWith("Duration:"))
                     {
                         var durationStr = line.Split(':')[1].Replace("ms", "").Trim();
                         if (int.TryParse(durationStr, out var duration))
@@ -248,7 +200,35 @@ namespace CreateGDAPI
                             log.Duration = duration;
                         }
                     }
+                    else if (line.StartsWith("ResponseCode:"))
+                    {
+                        log.ResponseCode = line.Split(':')[1].Trim();
+                    }
+                    else if (line.StartsWith("PartnerRef:"))
+                    {
+                        log.PartnerRef = line.Split(':')[1].Trim();
+                    }
+                    else if (line.StartsWith("TransactionRef:"))
+                    {
+                        log.TransactionRef = line.Split(':')[1].Trim();
+                    }
+                    else if (line.StartsWith("TransactionStatus:"))
+                    {
+                        var status = line.Split(':')[1].Trim();
+                        log.TransactionStatus = status;
 
+                        // Update flags based on status
+                        if (status == "PAID")
+                            log.IsPaid = true;
+                        else if (status == "CANCELLED")
+                            log.IsCancelled = true;
+                    }
+                    else if (line.StartsWith("Error:"))
+                    {
+                        log.ErrorMessage = line.Substring(6).Trim();
+                    }
+
+                    // ✅ PARSE REQUEST/RESPONSE SECTIONS
                     if (line.Trim() == "REQUEST:")
                     {
                         isInRequest = true;
@@ -256,7 +236,7 @@ namespace CreateGDAPI
                         continue;
                     }
 
-                    if (line.StartsWith("RESPONSE:"))
+                    if (line.Trim() == "RESPONSE:")
                     {
                         isInRequest = false;
                         isInResponse = true;
@@ -271,45 +251,18 @@ namespace CreateGDAPI
                     {
                         responseBuilder.AppendLine(line);
                     }
-
-                    if (string.IsNullOrEmpty(log.PartnerRef) && line.Contains("\"partnerRef\""))
-                    {
-                        try
-                        {
-                            var partnerRefStart = line.IndexOf("\"partnerRef\"") + 14;
-                            var partnerRefEnd = line.IndexOf("\"", partnerRefStart + 1);
-                            if (partnerRefEnd > partnerRefStart)
-                            {
-                                log.PartnerRef = line.Substring(partnerRefStart,
-                                    partnerRefEnd - partnerRefStart);
-                            }
-                        }
-                        catch { }
-                    }
                 }
 
-                log.RequestJson = requestBuilder.ToString();
-                log.ResponseJson = responseBuilder.ToString();
+                log.RequestJson = requestBuilder.ToString().Trim();
+                log.ResponseJson = responseBuilder.ToString().Trim();
 
-                // ✅ SET TRANSACTION STATUS FOR ERROR 99
+                // ✅ SET ERROR_99 STATUS
                 if (log.ResponseCode == "99")
                 {
                     log.TransactionStatus = "ERROR_99";
                 }
-                // ✅ SET DEFAULT STATUS CHO NHỮNG API KHÔNG CÓ TRANSACTION STATUS
-                else if (string.IsNullOrEmpty(log.TransactionStatus))
-                {
-                    // Chỉ set PENDING cho TRANSFER và TRANSINQ với ResponseCode 00
-                    if ((log.Endpoint == "TRANSFER" || log.Endpoint == "TRANSINQ") && log.ResponseCode == "00")
-                    {
-                        log.TransactionStatus = "PENDING";
-                    }
-                    else
-                    {
-                        log.TransactionStatus = ""; // Các API khác để trống
-                    }
-                }
 
+                // ✅ DETERMINE LOG STATUS if not set
                 if (string.IsNullOrEmpty(log.Status))
                 {
                     log.Status = DetermineLogStatus(log.Endpoint, log.ResponseCode, log.ResponseJson);
@@ -322,7 +275,6 @@ namespace CreateGDAPI
                 return null;
             }
         }
-
         private void UpdateStatistics()
         {
             var filteredLogs = _logs.Where(l =>
@@ -595,7 +547,6 @@ namespace CreateGDAPI
                 SplitterDistance = 350
             };
 
-            // Format JSON cho dễ đọc
             string formattedRequest = FormatJson(log.RequestJson);
             string formattedResponse = FormatJson(log.ResponseJson);
 
@@ -620,9 +571,7 @@ namespace CreateGDAPI
                 BorderStyle = BorderStyle.None
             };
 
-            // Syntax highlighting cho Request
             HighlightJson(txtRequest);
-
             groupRequest.Controls.Add(txtRequest);
             splitContainer.Panel1.Controls.Add(groupRequest);
 
@@ -647,9 +596,7 @@ namespace CreateGDAPI
                 BorderStyle = BorderStyle.None
             };
 
-            // Syntax highlighting cho Response
             HighlightJson(txtResponse);
-
             groupResponse.Controls.Add(txtResponse);
             splitContainer.Panel2.Controls.Add(groupResponse);
 
@@ -657,7 +604,7 @@ namespace CreateGDAPI
             var panelInfo = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 120,
+                Height = 140,
                 BackColor = Color.FromArgb(245, 245, 245),
                 Padding = new Padding(15)
             };
@@ -681,12 +628,34 @@ namespace CreateGDAPI
                 Padding = new Padding(10)
             };
 
+            var btnCopyAll = new Button
+            {
+                Text = "📑 Copy All (Log Format)",
+                Width = 180,
+                Height = 40,
+                Location = new Point(15, 10),
+                BackColor = Color.FromArgb(156, 39, 176),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnCopyAll.FlatAppearance.BorderSize = 0;
+            btnCopyAll.Click += (s, e) =>
+            {
+                // ✅ COPY THEO FORMAT LOG CHUẨN
+                string logFormat = BuildLogFormat(log, formattedRequest, formattedResponse);
+                Clipboard.SetText(logFormat);
+                MessageBox.Show("✅ Đã copy log theo format chuẩn vào clipboard!", "Success",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            };
+
             var btnCopyRequest = new Button
             {
                 Text = "📋 Copy Request",
-                Width = 160,
+                Width = 140,
                 Height = 40,
-                Location = new Point(15, 10),
+                Location = new Point(205, 10),
                 BackColor = Color.FromArgb(76, 175, 80),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -707,9 +676,9 @@ namespace CreateGDAPI
             var btnCopyResponse = new Button
             {
                 Text = "📋 Copy Response",
-                Width = 160,
+                Width = 140,
                 Height = 40,
-                Location = new Point(185, 10),
+                Location = new Point(355, 10),
                 BackColor = Color.FromArgb(33, 150, 243),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -727,33 +696,6 @@ namespace CreateGDAPI
                 }
             };
 
-            var btnCopyAll = new Button
-            {
-                Text = "📑 Copy All",
-                Width = 140,
-                Height = 40,
-                Location = new Point(355, 10),
-                BackColor = Color.FromArgb(156, 39, 176),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                Cursor = Cursors.Hand
-            };
-            btnCopyAll.FlatAppearance.BorderSize = 0;
-            btnCopyAll.Click += (s, e) =>
-                {
-                    string info = 
-                        $"Timestamp: {log.Timestamp:yyyy-MM-dd HH:mm:ss}\n" +
-                        $"Endpoint: {log.Endpoint}\n" +
-                        $"Duration: {log.Duration} ms\n" +
-                        $"Status: {log.Status}\n" +
-                        $"Response Code: {log.ResponseCode}\n";
-                    string allText = 
-                        $"{info}\nREQUEST:\n{formattedRequest}\n\nRESPONSE:\n{formattedResponse}";
-                    Clipboard.SetText(allText);
-                    MessageBox.Show("✅ Request & Response đã được copy vào clipboard!", "Success",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                };
             var btnClose = new Button
             {
                 Text = "❌ Close",
@@ -771,8 +713,8 @@ namespace CreateGDAPI
             btnClose.Click += (s, e) => detailForm.Close();
 
             panelButtons.Controls.AddRange(new System.Windows.Forms.Control[] {
-                btnCopyRequest, btnCopyResponse, btnCopyAll, btnClose
-            });
+        btnCopyAll, btnCopyRequest, btnCopyResponse, btnClose
+    });
 
             detailForm.Controls.Add(splitContainer);
             detailForm.Controls.Add(panelInfo);
@@ -780,7 +722,46 @@ namespace CreateGDAPI
 
             detailForm.ShowDialog();
         }
+        private string BuildLogFormat(ApiRequestLog log, string requestJson, string responseJson)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("----------------------------------------------------");
 
+            // Header with status marker
+            string statusMarker = log.TransactionStatus switch
+            {
+                "PAID" => "💰 PAID",
+                "CANCELLED" => "🚫 CANCELLED",
+                "PENDING" => "⏳ PENDING",
+                "ERROR_99" => "❌ ERROR_99",
+                _ => ""
+            };
+
+            sb.AppendLine($"[{log.Timestamp:yyyy-MM-dd HH:mm:ss}] - {log.Endpoint} {statusMarker}");
+            sb.AppendLine($"Status: {log.Status}");
+            sb.AppendLine($"Duration: {log.Duration} ms");
+            sb.AppendLine($"ResponseCode: {log.ResponseCode}");
+
+            if (!string.IsNullOrEmpty(log.PartnerRef))
+                sb.AppendLine($"PartnerRef: {log.PartnerRef}");
+
+            if (!string.IsNullOrEmpty(log.TransactionRef))
+                sb.AppendLine($"TransactionRef: {log.TransactionRef}");
+
+            if (!string.IsNullOrEmpty(log.TransactionStatus))
+                sb.AppendLine($"TransactionStatus: {log.TransactionStatus}");
+
+            if (!string.IsNullOrEmpty(log.ErrorMessage))
+                sb.AppendLine($"Error: {log.ErrorMessage}");
+
+            sb.AppendLine("REQUEST:");
+            sb.AppendLine(requestJson);
+            sb.AppendLine("RESPONSE:");
+            sb.AppendLine(responseJson);
+            sb.AppendLine("----------------------------------------------------");
+
+            return sb.ToString();
+        }
         private string BuildInfoText(ApiRequestLog log)
         {
             var sb = new StringBuilder();
@@ -789,25 +770,34 @@ namespace CreateGDAPI
             sb.AppendLine($"📊 Status: {log.Status}     💬 Response Code: {log.ResponseCode}");
             sb.AppendLine();
 
-            // ✅ HIỂN THỊ TRANSACTION STATUS
+            // ✅ TRANSACTION STATUS với icon
             if (!string.IsNullOrEmpty(log.TransactionStatus))
             {
                 string statusIcon = log.TransactionStatus switch
                 {
                     "PAID" => "💰",
                     "CANCELLED" => "🚫",
-                    _ => "⏳"
+                    "ERROR_99" => "❌",
+                    "PENDING" => "⏳",
+                    _ => "📋"
                 };
                 sb.AppendLine($"{statusIcon} Transaction Status: {log.TransactionStatus}");
                 sb.AppendLine();
             }
 
-            sb.AppendLine($"🔖 RefNo: {log.RefNo}");
-            sb.AppendLine($"🔗 PartnerRef: {log.PartnerRef}");
+            if (!string.IsNullOrEmpty(log.PartnerRef))
+            {
+                sb.AppendLine($"🔗 PartnerRef: {log.PartnerRef}");
+            }
 
             if (!string.IsNullOrEmpty(log.TransactionRef))
             {
                 sb.AppendLine($"🆔 TransactionRef: {log.TransactionRef}");
+            }
+
+            if (!string.IsNullOrEmpty(log.RefNo))
+            {
+                sb.AppendLine($"🔖 RefNo: {log.RefNo}");
             }
 
             if (!string.IsNullOrEmpty(log.ErrorMessage))
@@ -818,6 +808,7 @@ namespace CreateGDAPI
 
             return sb.ToString();
         }
+
 
         private string FormatJson(string json)
         {
@@ -1045,7 +1036,8 @@ namespace CreateGDAPI
                         FileName = savePath,
                         UseShellExecute = true
                     });
-                };
+                }
+                ;
             }
             catch (Exception ex)
             {
