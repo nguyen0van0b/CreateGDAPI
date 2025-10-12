@@ -47,6 +47,8 @@
             label6 = new Label();
             groupBox3 = new GroupBox();
             txtResult = new TextBox();
+            txtPartnerRefList = new TextBox();
+            btnCancelByList = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBoxAutoPush.SuspendLayout();
@@ -56,6 +58,7 @@
             // 
             // groupBox1
             // 
+            groupBox1.Controls.Add(txtPartnerRefList);
             groupBox1.Controls.Add(comboApiEndpoint);
             groupBox1.Controls.Add(label5);
             groupBox1.Controls.Add(comboServiceType);
@@ -97,7 +100,7 @@
             // 
             comboServiceType.DropDownStyle = ComboBoxStyle.DropDownList;
             comboServiceType.FormattingEnabled = true;
-            comboServiceType.Location = new Point(940, 25);
+            comboServiceType.Location = new Point(723, 28);
             comboServiceType.Name = "comboServiceType";
             comboServiceType.Size = new Size(200, 23);
             comboServiceType.TabIndex = 9;
@@ -105,7 +108,7 @@
             // label4
             // 
             label4.AutoSize = true;
-            label4.Location = new Point(850, 28);
+            label4.Location = new Point(633, 31);
             label4.Name = "label4";
             label4.Size = new Size(75, 15);
             label4.TabIndex = 8;
@@ -115,7 +118,7 @@
             // 
             comboCurrency.DropDownStyle = ComboBoxStyle.DropDownList;
             comboCurrency.FormattingEnabled = true;
-            comboCurrency.Location = new Point(940, 60);
+            comboCurrency.Location = new Point(723, 63);
             comboCurrency.Name = "comboCurrency";
             comboCurrency.Size = new Size(200, 23);
             comboCurrency.TabIndex = 7;
@@ -123,7 +126,7 @@
             // label3
             // 
             label3.AutoSize = true;
-            label3.Location = new Point(850, 63);
+            label3.Location = new Point(633, 66);
             label3.Name = "label3";
             label3.Size = new Size(58, 15);
             label3.TabIndex = 6;
@@ -131,7 +134,7 @@
             // 
             // txtSoLuong
             // 
-            txtSoLuong.Location = new Point(530, 60);
+            txtSoLuong.Location = new Point(420, 60);
             txtSoLuong.Name = "txtSoLuong";
             txtSoLuong.Size = new Size(200, 23);
             txtSoLuong.TabIndex = 5;
@@ -140,7 +143,7 @@
             // label2
             // 
             label2.AutoSize = true;
-            label2.Location = new Point(440, 63);
+            label2.Location = new Point(330, 63);
             label2.Name = "label2";
             label2.Size = new Size(57, 15);
             label2.TabIndex = 4;
@@ -148,7 +151,7 @@
             // 
             // txtAgencyCode
             // 
-            txtAgencyCode.Location = new Point(530, 25);
+            txtAgencyCode.Location = new Point(420, 25);
             txtAgencyCode.Name = "txtAgencyCode";
             txtAgencyCode.Size = new Size(200, 23);
             txtAgencyCode.TabIndex = 3;
@@ -156,7 +159,7 @@
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(440, 28);
+            label1.Location = new Point(330, 28);
             label1.Name = "label1";
             label1.Size = new Size(81, 15);
             label1.TabIndex = 2;
@@ -271,6 +274,7 @@
             // 
             // groupBoxAutoPush
             // 
+            groupBoxAutoPush.Controls.Add(btnCancelByList);
             groupBoxAutoPush.Controls.Add(lblAutoPushStatus);
             groupBoxAutoPush.Controls.Add(btnStartAutoPush);
             groupBoxAutoPush.Controls.Add(numAutoPushInterval);
@@ -365,6 +369,28 @@
             txtResult.TabIndex = 0;
             txtResult.WordWrap = false;
             // 
+            // txtPartnerRefList
+            // 
+            txtPartnerRefList.Font = new Font("Consolas", 9F);
+            txtPartnerRefList.Location = new Point(940, 28);
+            txtPartnerRefList.Multiline = true;
+            txtPartnerRefList.Name = "txtPartnerRefList";
+            txtPartnerRefList.PlaceholderText = "Nhập danh sách partnerRef (mỗi dòng 1 mã)";
+            txtPartnerRefList.ScrollBars = ScrollBars.Vertical;
+            txtPartnerRefList.Size = new Size(200, 60);
+            txtPartnerRefList.TabIndex = 13;
+            // 
+            // btnCancelByList
+            // 
+            btnCancelByList.BackColor = Color.FromArgb(255, 192, 192);
+            btnCancelByList.Location = new Point(991, 26);
+            btnCancelByList.Name = "btnCancelByList";
+            btnCancelByList.Size = new Size(127, 30);
+            btnCancelByList.TabIndex = 12;
+            btnCancelByList.Text = "❌ Cancel By List";
+            btnCancelByList.UseVisualStyleBackColor = false;
+            btnCancelByList.Click += btnCancelByList_Click;
+            // 
             // Form3
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -421,5 +447,7 @@
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.GroupBox groupBox3;
         private System.Windows.Forms.TextBox txtResult;
+        private System.Windows.Forms.TextBox txtPartnerRefList;
+        private System.Windows.Forms.Button btnCancelByList;
     }
 }

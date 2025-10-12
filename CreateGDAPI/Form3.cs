@@ -644,7 +644,7 @@ RESPONSE: {healthResponse.StatusCode}
 
                     case "canceltrans":
                         json = CreateCancelTransRequest(partnerCode, agencyCode);
-                        // ✅ KIỂM TRA NULL - KHÔNG GỬI NẾU KHÔNG CÓ GIAO DỊCH
+                        // ✅ KIỂM TRA NULL - KHÔNG GỬI NẾU KHÔNG CÓ GIAO DỊCH
                         if (string.IsNullOrEmpty(json))
                         {
                             AppendResult($"[WARNING] Bỏ qua CANCELTRANS request #{stt} - không có giao dịch khả dụng\r\n");
@@ -742,7 +742,8 @@ RESPONSE: {healthResponse.StatusCode}
                                 partnerRef2 = prProp2.GetString() ?? string.Empty;
                             }
 
-                            if (apiStatus2 == "200" && !string.IsNullOrEmpty(partnerRef2))
+                            // Replace the block that updates the log file for CANCELLED transactions
+                            if (apiStatus2 == "500" && !string.IsNullOrEmpty(partnerRef2))
                             {
                                 MarkTransactionAsCancelled(partnerRef2);
 
@@ -756,17 +757,41 @@ RESPONSE: {healthResponse.StatusCode}
                                         string logContent = File.ReadAllText(logPath, Encoding.UTF8);
                                         // Kiểm tra đã có dòng CANCELLED cho partnerRef chưa
                                         string cancelLine = $"❌ Transaction CANCELLED - PartnerRef: {partnerRef2}";
-                                        if (!logContent.Contains(cancelLine))
+                                        string updatedLine = $"🚫 [UPDATED] Transaction CANCELLED - PartnerRef: {partnerRef2}";
+                                        if (!logContent.Contains(cancelLine) && !logContent.Contains(updatedLine))
                                         {
                                             var lines = logContent.Split(new[] { Environment.NewLine }, StringSplitOptions.None).ToList();
+                                            // Tìm vị trí dòng PAID/PENDING của partnerRef2 để chèn CANCELLED ngay sau đó
+                                            int insertIndex = -1;
                                             for (int i = 0; i < lines.Count; i++)
                                             {
-                                                if (lines[i].Contains(partnerRef2) && !lines[i].Contains("CANCELLED"))
+                                                // Tìm dòng có PartnerRef và là PAID hoặc PENDING
+                                                if (
+                                                    (lines[i].Contains("🔒 Transaction PAID - PartnerRef:") ||
+                                                     lines[i].Contains("⏳ Transaction PENDING - PartnerRef:")) &&
+                                                    lines[i].Contains(partnerRef2)
+                                                )
                                                 {
-                                                    lines.Insert(i + 1, $"🚫 [UPDATED] Transaction CANCELLED - PartnerRef: {partnerRef2}");
+                                                    insertIndex = i + 1;
                                                     break;
                                                 }
                                             }
+                                            // Nếu tìm thấy vị trí PAID/PENDING thì chèn sau đó, nếu không thì tìm dòng partnerRef bất kỳ
+                                            if (insertIndex == -1)
+                                            {
+                                                for (int i = 0; i < lines.Count; i++)
+                                                {
+                                                    if (lines[i].Contains(partnerRef2))
+                                                    {
+                                                        insertIndex = i + 1;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            // Nếu vẫn không tìm thấy thì chèn vào cuối
+                                            if (insertIndex == -1) insertIndex = lines.Count;
+
+                                            lines.Insert(insertIndex, updatedLine);
                                             File.WriteAllText(logPath, string.Join(Environment.NewLine, lines), Encoding.UTF8);
                                         }
                                     }
@@ -888,8 +913,8 @@ RESPONSE: {healthResponse.StatusCode}
         private string CreateTransferRequest(string partnerCode, string agencyCode)
         {
             string refNo = Guid.NewGuid().ToString();
-            string partnerRef = "PartnerRef-" + agencyCode + GenerateRandomNumber(6);
-            string pin = "PIN-" + agencyCode + GenerateRandomNumber(6);
+            string partnerRef = agencyCode + GenerateRandomNumber(6);
+            string pin = agencyCode + GenerateRandomNumber(6);
             string serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
             string currency = comboCurrency.SelectedItem?.ToString() ?? "VND";
 
@@ -923,7 +948,7 @@ RESPONSE: {healthResponse.StatusCode}
                 ward = wardsList[rnd.Next(wardsList.Count)];
             }
 
-            var root = new Dictionary<string, object>
+            var root = new Dictionary<string, object?>
             {
                 ["refNo"] = refNo,
                 ["partnerCode"] = partnerCode,
@@ -1052,7 +1077,7 @@ RESPONSE: {healthResponse.StatusCode}
             {
                 var trans = availableTransactions[rnd.Next(availableTransactions.Count)];
                 partnerRef = trans.PartnerRef;
-                pin = "PIN-" + agencyCode + GenerateRandomNumber(6);
+                //pin = "PIN-" + agencyCode + GenerateRandomNumber(6);
 
                 Console.WriteLine($"📤 Cancel request for available transaction: {partnerRef}");
             }
@@ -1109,12 +1134,12 @@ RESPONSE: {healthResponse.StatusCode}
             {
                 var trans = _createdTransactions[rnd.Next(_createdTransactions.Count)];
                 partnerRef = trans.PartnerRef;
-                pin = "PIN-" + GenerateRandomNumber(6);
+                pin = GenerateRandomNumber(6);
             }
             else
             {
-                partnerRef = "PartnerRef-" + GenerateRandomNumber(6);
-                pin = "PIN-" + GenerateRandomNumber(6);
+                partnerRef =  GenerateRandomNumber(6);
+                pin = GenerateRandomNumber(6);
             }
 
             var root = new Dictionary<string, object>
@@ -1607,7 +1632,9 @@ RESPONSE: {healthResponse.StatusCode}
                     await Task.Delay(50);
 
                     // Kiểm tra số pending (không paid, không cancelled)
-                    var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled);
+                    var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
+                            t.ResponseCode != "00" &&
+                            t.ResponseCode != "99");
                     if (pendingCount >= 5)
                     {
                         // Đã đủ 5 giao dịch chưa paid, chưa cancel thì dừng
@@ -1623,10 +1650,10 @@ RESPONSE: {healthResponse.StatusCode}
                 // STEP 3: QUERYINFOR - Gọi tất cả currencies (tối đa 10)
                 // ======================================================================
                 AppendResult("[STEP 3] 💰 Testing QUERYINFOR (all currencies, max 10)...\r\n");
-                string[] currencies = { "VND", "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "CNY", "SGD" };
+                string[] currencies = { "VND", "USD", "EUR", "JPY", "AUD", "CAD"};
                 int queryCount = 0;
 
-                foreach (var currency in currencies.Take(10))
+                foreach (var currency in currencies.Take(5))
                 {
                     if (!_isAutoTesting) break;
 
@@ -1657,19 +1684,19 @@ RESPONSE: {healthResponse.StatusCode}
                 {
                     if (!_isAutoTesting) break;
 
-                    var availablePending = _createdTransactions
-                        .Where(t => t.PartnerCode == partnerCode &&
-                           !t.IsPaid &&
-                           !t.IsCancelled &&
-                           t.ResponseCode != "00" &&
-                           t.ResponseCode != "99")
-               .ToList();
+               //     var availablePending = _createdTransactions
+               //         .Where(t => t.PartnerCode == partnerCode &&
+               //            !t.IsPaid &&
+               //            !t.IsCancelled &&
+               //            t.ResponseCode != "00" &&
+               //            t.ResponseCode != "99")
+               //.ToList();
                
-                    if (availablePending.Count == 0)
-                    {
-                        AppendResult($"[STEP 4] ⚠️ Hết giao dịch pending để cancel sau {cancelCount} attempts\r\n");
-                        break;
-                    }
+               //     if (availablePending.Count == 0)
+               //     {
+               //         AppendResult($"[STEP 4] ⚠️ Hết giao dịch pending để cancel sau {cancelCount} attempts\r\n");
+               //         break;
+               //     }
 
                     await SendApiRequest("canceltrans", partnerCode, agencyCode, i + 1);
                     cancelCount++;
@@ -1703,7 +1730,7 @@ RESPONSE: {healthResponse.StatusCode}
                 AppendResult("[STEP 6] 🔍 Testing TRANSINQ (4 paid + 3 cancelled + 3 pending)...\r\n");
 
                 // Test PAID transactions
-                var paidTrans = _createdTransactions.Where(t => t.IsPaid).Take(4).ToList();
+                var paidTrans = _createdTransactions.Where(t => t.PartnerCode == partnerCode && t.IsPaid).Take(4).ToList();
                 AppendResult($"[STEP 6.1] Testing {paidTrans.Count} PAID transactions...\r\n");
                 foreach (var trans in paidTrans)
                 {
@@ -1713,7 +1740,7 @@ RESPONSE: {healthResponse.StatusCode}
                 }
 
                 // Test CANCELLED transactions
-                var cancelledTrans = _createdTransactions.Where(t => t.IsCancelled).Take(3).ToList();
+                var cancelledTrans = _createdTransactions.Where(t => t.PartnerCode == partnerCode && t.IsCancelled).Take(3).ToList();
                 AppendResult($"[STEP 6.2] Testing {cancelledTrans.Count} CANCELLED transactions...\r\n");
                 foreach (var trans in cancelledTrans)
                 {
@@ -1724,7 +1751,11 @@ RESPONSE: {healthResponse.StatusCode}
 
                 // Test PENDING transactions
                 var pendingTrans = _createdTransactions
-                    .Where(t => !t.IsPaid && !t.IsCancelled)
+                    .Where(t => t.PartnerCode == partnerCode &&
+                            !t.IsPaid &&
+                            !t.IsCancelled &&
+                            t.ResponseCode != "00" &&
+                            t.ResponseCode != "99")
                     .Take(3)
                     .ToList();
                 AppendResult($"[STEP 6.3] Testing {pendingTrans.Count} PENDING transactions...\r\n");
@@ -1824,7 +1855,87 @@ RESPONSE: {healthResponse.StatusCode}
                 WriteApiLog("transinq", "ERROR", 0, "", ex.Message, json, null);
             }
         }
+        private async void btnCancelByList_Click(object sender, EventArgs e)
+        {
+            // Lấy danh sách partnerRef từ textbox, mỗi dòng 1 partnerRef
+            var partnerRefs = txtPartnerRefList.Lines
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrEmpty(line))
+                .ToList();
 
+            if (partnerRefs.Count == 0)
+            {
+                MessageBox.Show("Vui lòng nhập ít nhất 1 partnerRef.");
+                return;
+            }
+
+            string partnerCode = txtPartnerCode.Text.Trim();
+            string agencyCode = txtAgencyCode.Text.Trim();
+
+            int success = 0, fail = 0;
+            foreach (var partnerRef in partnerRefs)
+            {
+                bool result = await CancelTransactionByPartnerRef(partnerCode, agencyCode, partnerRef);
+                if (result) success++; else fail++;
+                await Task.Delay(100); // tránh spam quá nhanh
+            }
+
+            MessageBox.Show($"Đã gửi cancel cho {partnerRefs.Count} partnerRef.\nThành công: {success}, Thất bại: {fail}");
+        }
+        private async Task<bool> CancelTransactionByPartnerRef(string partnerCode, string agencyCode, string partnerRef)
+        {
+            try
+            {
+                var root = new Dictionary<string, object>
+                {
+                    ["refNo"] = Guid.NewGuid().ToString(),
+                    ["partnerCode"] = partnerCode,
+                    ["agentCode"] = agencyCode,
+                    ["partnerRef"] = partnerRef,
+                    ["pin"] = "",
+                    ["paymentType"] = comboServiceType.SelectedItem?.ToString() ?? "AD",
+                    ["cancelReason"] = "Batch cancel"
+                };
+
+                string json = JsonSerializer.Serialize(root, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+
+                string url = $"https://58.186.16.67/api/partner/canceltrans";
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var start = DateTime.Now;
+
+                HttpResponseMessage response = await client.PostAsync(url, content);
+                string result = await response.Content.ReadAsStringAsync();
+                var elapsed = DateTime.Now - start;
+
+                // Kiểm tra responseCode
+                string responseCode = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(result);
+                    if (doc.RootElement.TryGetProperty("response", out var responseObj) &&
+                        responseObj.TryGetProperty("responseCode", out var codeProp))
+                    {
+                        responseCode = codeProp.GetString();
+                    }
+                }
+                catch { }
+
+                // Ghi log
+                string status = responseCode == "00" ? "SUCCESS" : "FAILED";
+                WriteApiLog("canceltrans", status, (int)elapsed.TotalMilliseconds, responseCode, null, json, result);
+
+                return responseCode == "00";
+            }
+            catch (Exception ex)
+            {
+                WriteApiLog("canceltrans", "ERROR", 0, "", ex.Message, null, null);
+                return false;
+            }
+        }
         private string CreateTransInqRequestWithPartnerRef(string partnerCode, string partnerRef)
         {
             var root = new Dictionary<string, object>
