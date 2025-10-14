@@ -1121,7 +1121,8 @@ RESPONSE: {healthResponse.StatusCode}
                 .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode == "05")
+                            t.ResponseCode == "05" &&
+                            t.ResponseCode == "98")
                 .ToList();
 
             if (availableTransactions.Count > 0)
@@ -1215,7 +1216,8 @@ RESPONSE: {healthResponse.StatusCode}
                 .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode == "05")
+                            t.ResponseCode == "05" &&
+                            t.ResponseCode == "98")
                 .ToList();
 
             if (availableTransactions.Count > 0)
@@ -1340,7 +1342,7 @@ RESPONSE: {healthResponse.StatusCode}
             var paidTrans = _createdTransactions.Where(t => t.IsPaid).ToList();
             var cancelledTrans = _createdTransactions.Where(t => t.IsCancelled).ToList();
             var error99Trans = _createdTransactions.Where(t => t.ResponseCode == "99").ToList();
-            var availableTrans = _createdTransactions.Where(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05").ToList();
+            var availableTrans = _createdTransactions.Where(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05" && t.ResponseCode == "98").ToList();
 
             sb.AppendLine($"💰 PAID TRANSACTIONS ({paidTrans.Count}):");
             sb.AppendLine("=".PadRight(70, '='));
@@ -1807,7 +1809,8 @@ RESPONSE: {healthResponse.StatusCode}
 
                     // Kiểm tra số pending (không paid, không cancelled)
                     var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
-                            t.ResponseCode != "05");
+                            t.ResponseCode == "05" &&
+                            t.ResponseCode == "98");
                     if (pendingCount >= 5)
                     {
                         // Đã đủ 5 giao dịch chưa paid, chưa cancel thì dừng
@@ -1816,7 +1819,8 @@ RESPONSE: {healthResponse.StatusCode}
                 }
 
                 var finalPending = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
-                            t.ResponseCode == "05");
+                            t.ResponseCode == "05" &&
+                            t.ResponseCode == "98");
                 AppendResult($"[STEP 2] ✅ TRANSFER completed: {transferCount} transfers, {finalPending} pending\r\n\r\n");
                 if (!_isAutoTesting) return;
 
@@ -1914,7 +1918,8 @@ RESPONSE: {healthResponse.StatusCode}
                     .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode == "05")
+                            t.ResponseCode == "05" &&
+                            t.ResponseCode == "98")
                     .Take(3)
                     .ToList();
                 AppendResult($"[STEP 6.3] Testing {pendingTrans.Count} PENDING transactions...\r\n");
@@ -2118,7 +2123,7 @@ RESPONSE: {healthResponse.StatusCode}
             var paidTransactions = _createdTransactions.Count(t => t.IsPaid);
             var cancelledTransactions = _createdTransactions.Count(t => t.IsCancelled);
             var error99Transactions = _createdTransactions.Count(t => t.ResponseCode == "99");
-            var availableTransactions = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05");
+            var availableTransactions = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05" && t.ResponseCode == "98");
 
             var statsText = $@"
 ╔══════════════════════════════════════════╗
