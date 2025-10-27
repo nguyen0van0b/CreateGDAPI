@@ -1800,9 +1800,9 @@ RESPONSE: {healthResponse.StatusCode}
                 if (!_isAutoTesting) return;
 
                 // ======================================================================
-                // STEP 2: TRANSFER - Tối thiểu 5 pending, tối đa 150
+                // STEP 2: TRANSFER - Tối thiểu 5 pending, tối đa 500
                 // ======================================================================
-                AppendResult("[STEP 2] 💸 Testing TRANSFER (min 5 pending, max 150)...\r\n");
+                AppendResult("[STEP 2] 💸 Testing TRANSFER (min 5 pending, max 500)...\r\n");
                 int transferCount = 0;
                 int maxTransfers = 500;
 
