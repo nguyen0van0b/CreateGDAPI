@@ -606,6 +606,7 @@ namespace CreateGDAPI
             {
                 await SendApiRequest(endpoint, partnerCode, agencyCode, i);
             }
+            AppendResult("----------------THE END----------------");
         }
 
         private async Task SendApiRequest(string endpoint, string partnerCode, string agencyCode, int stt)
@@ -894,7 +895,7 @@ RESPONSE: {healthResponse.StatusCode}
         private string CreateTransferRequest(string partnerCode, string agencyCode)
         {
             string refNo = Guid.NewGuid().ToString();
-            string partnerRef = agencyCode + GenerateRandomNumber(6);
+            string partnerRef = agencyCode + GenerateRandomNumber(12); 
             string pin = agencyCode + GenerateRandomNumber(6);
             string serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
             string currency = comboCurrency.SelectedItem?.ToString() ?? "VND";
@@ -1121,8 +1122,7 @@ RESPONSE: {healthResponse.StatusCode}
                 .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode == "05" &&
-                            t.ResponseCode == "98")
+                            (t.ResponseCode == "05" ||t.ResponseCode == "98"))
                 .ToList();
 
             if (availableTransactions.Count > 0)
@@ -1216,8 +1216,7 @@ RESPONSE: {healthResponse.StatusCode}
                 .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode == "05" &&
-                            t.ResponseCode == "98")
+                            (t.ResponseCode == "05" || t.ResponseCode == "98"))
                 .ToList();
 
             if (availableTransactions.Count > 0)
@@ -1284,20 +1283,26 @@ RESPONSE: {healthResponse.StatusCode}
         private string GenerateRandomName()
         {
             string[] ho = {
-                "Nguyen", "Tran", "Le", "Pham", "Hoang", "Huynh", "Phan", "Vu", "Vo", "Dang",
-                "Bui", "Do", "Ngo", "Duong", "Ly"
-            };
+        "Nguyen", "Tran", "Le", "Pham", "Hoang", "Huynh", "Phan", "Vu", "Vo", "Dang",
+        "Bui", "Do", "Ngo", "Duong", "Ly", "Truong", "Dinh", "Cao", "Mai", "Diep",
+        "Ton", "Ha", "Chu", "Luong", "Ngô", "Luu", "Lam", "Kieu", "Tang", "Ta"
+    };
 
             string[] lot = {
-                "Van", "Thi", "Huu", "Minh", "Quoc", "Gia", "Thanh", "Duc", "Khanh", "Kim"
-            };
+        "Van", "Thi", "Huu", "Minh", "Quoc", "Gia", "Thanh", "Duc", "Khanh", "Kim",
+        "Nhat", "Ngoc", "Hong", "Anh", "Trung", "Bich", "Hoang", "My", "Thuy", "Bao",
+        "Xuan", "Tuan", "Chau", "Hai", "Son", "Tien", "Hanh", "Tuyet", "Viet", "Phuong"
+    };
 
             string[] ten = {
-                "An", "Binh", "Cuong", "Dung", "Dong", "Hanh", "Lan", "Mai", "Nam", "Phuc"
-            };
+        "An", "Binh", "Cuong", "Dung", "Dong", "Hanh", "Lan", "Mai", "Nam", "Phuc",
+        "Son", "Trang", "Thao", "Linh", "Hieu", "Tuan", "Yen", "Nhi", "Hung", "Hoa",
+        "Vy", "Thien", "Hao", "Nghia", "Kiet", "Nga", "Tam", "Quynh", "Duy", "Tien"
+    };
 
             return $"{ho[rnd.Next(ho.Length)]} {lot[rnd.Next(lot.Length)]} {ten[rnd.Next(ten.Length)]}";
         }
+
 
         private string GenerateRandomNumber(int length)
         {
@@ -1342,7 +1347,7 @@ RESPONSE: {healthResponse.StatusCode}
             var paidTrans = _createdTransactions.Where(t => t.IsPaid).ToList();
             var cancelledTrans = _createdTransactions.Where(t => t.IsCancelled).ToList();
             var error99Trans = _createdTransactions.Where(t => t.ResponseCode == "99").ToList();
-            var availableTrans = _createdTransactions.Where(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05" && t.ResponseCode == "98").ToList();
+            var availableTrans = _createdTransactions.Where(t => !t.IsPaid && !t.IsCancelled && (t.ResponseCode == "05" || t.ResponseCode == "98")).ToList();
 
             sb.AppendLine($"💰 PAID TRANSACTIONS ({paidTrans.Count}):");
             sb.AppendLine("=".PadRight(70, '='));
@@ -1799,7 +1804,7 @@ RESPONSE: {healthResponse.StatusCode}
                 // ======================================================================
                 AppendResult("[STEP 2] 💸 Testing TRANSFER (min 5 pending, max 150)...\r\n");
                 int transferCount = 0;
-                int maxTransfers = 150;
+                int maxTransfers = 500;
 
                 while (transferCount < maxTransfers && _isAutoTesting)
                 {
@@ -1809,8 +1814,7 @@ RESPONSE: {healthResponse.StatusCode}
 
                     // Kiểm tra số pending (không paid, không cancelled)
                     var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
-                            t.ResponseCode == "05" &&
-                            t.ResponseCode == "98");
+                            (t.ResponseCode == "05" || t.ResponseCode == "98"));
                     if (pendingCount >= 5)
                     {
                         // Đã đủ 5 giao dịch chưa paid, chưa cancel thì dừng
@@ -1819,8 +1823,7 @@ RESPONSE: {healthResponse.StatusCode}
                 }
 
                 var finalPending = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
-                            t.ResponseCode == "05" &&
-                            t.ResponseCode == "98");
+                            (t.ResponseCode == "05" || t.ResponseCode == "98"));
                 AppendResult($"[STEP 2] ✅ TRANSFER completed: {transferCount} transfers, {finalPending} pending\r\n\r\n");
                 if (!_isAutoTesting) return;
 
@@ -1918,8 +1921,7 @@ RESPONSE: {healthResponse.StatusCode}
                     .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            t.ResponseCode == "05" &&
-                            t.ResponseCode == "98")
+                            (t.ResponseCode == "05" || t.ResponseCode == "98"))
                     .Take(3)
                     .ToList();
                 AppendResult($"[STEP 6.3] Testing {pendingTrans.Count} PENDING transactions...\r\n");
@@ -2123,7 +2125,7 @@ RESPONSE: {healthResponse.StatusCode}
             var paidTransactions = _createdTransactions.Count(t => t.IsPaid);
             var cancelledTransactions = _createdTransactions.Count(t => t.IsCancelled);
             var error99Transactions = _createdTransactions.Count(t => t.ResponseCode == "99");
-            var availableTransactions = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled && t.ResponseCode == "05" && t.ResponseCode == "98");
+            var availableTransactions = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled && (t.ResponseCode == "05" || t.ResponseCode == "98"));
 
             var statsText = $@"
 ╔══════════════════════════════════════════╗
