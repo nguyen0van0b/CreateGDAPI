@@ -82,7 +82,26 @@ namespace CreateGDAPI
             // ✅ THÊM EVENT HANDLER CHO COLUMN HEADER CLICK
             dgvDetails.ColumnHeaderMouseClick += DgvDetails_ColumnHeaderMouseClick;
             dgvStatistics.ColumnHeaderMouseClick += DgvStatistics_ColumnHeaderMouseClick;
+            txtSearchPartnerRef.TextChanged += txtSearchPartnerRef_TextChanged;
             LoadLogs();
+            // ✅ Ensure proper DataGridView settings
+            dgvDetails.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvDetails.MultiSelect = false;
+            dgvDetails.ReadOnly = true;
+            dgvDetails.AllowUserToAddRows = false;
+            dgvDetails.AllowUserToDeleteRows = false;
+
+            // ✅ Re-bind event handler (ensures it's attached)
+            dgvDetails.CellClick -= dgvDetails_CellClick;
+            dgvDetails.CellClick += dgvDetails_CellClick;
+
+            // ✅ Add visual feedback on hover
+            dgvDetails.CellMouseEnter += (s, e) => {
+                if (e.RowIndex >= 0) dgvDetails.Cursor = Cursors.Hand;
+            };
+            dgvDetails.CellMouseLeave += (s, e) => {
+                dgvDetails.Cursor = Cursors.Default;
+            };
             UpdateStatistics();
             UpdateDetailGrid();
         }
@@ -604,7 +623,16 @@ namespace CreateGDAPI
             {
                 filteredLogs = filteredLogs.Where(l => l.Endpoint == selectedEndpoint).ToList();
             }
-
+            // ✅ THÊM MỚI: Filter theo PartnerRef
+            string searchPartnerRef = txtSearchPartnerRef?.Text?.Trim();
+            if (!string.IsNullOrEmpty(searchPartnerRef))
+            {
+                // Tìm kiếm không phân biệt hoa thường, có thể tìm một phần
+                filteredLogs = filteredLogs.Where(l =>
+                    !string.IsNullOrEmpty(l.PartnerRef) &&
+                    l.PartnerRef.IndexOf(searchPartnerRef, StringComparison.OrdinalIgnoreCase) >= 0
+                ).ToList();
+            }
             filteredLogs = filteredLogs.OrderByDescending(l => l.Timestamp).ToList();
             dgvDetails.DataSource = filteredLogs;
 
@@ -833,14 +861,35 @@ namespace CreateGDAPI
         }
         private void dgvDetails_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex < 0) return;
+            try
+            {
+                // Ignore header clicks
+                if (e.RowIndex < 0) return;
 
-            var selectedLog = dgvDetails.Rows[e.RowIndex].DataBoundItem as ApiRequestLog;
-            if (selectedLog == null) return;
+                // Ensure row selection
+                dgvDetails.ClearSelection();
+                dgvDetails.Rows[e.RowIndex].Selected = true;
 
-            ShowRequestResponseDetail(selectedLog);
+                // Get log data directly from DataSource
+                var logs = dgvDetails.DataSource as List<ApiRequestLog>;
+                if (logs == null || e.RowIndex >= logs.Count)
+                {
+                    MessageBox.Show("Không thể lấy thông tin log này.",
+                        "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var selectedLog = logs[e.RowIndex];
+                ShowRequestResponseDetail(selectedLog);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi hiển thị chi tiết: {ex.Message}\n\n" +
+                    $"RowIndex: {e.RowIndex}\n" +
+                    $"DataSource: {(dgvDetails.DataSource != null ? "OK" : "NULL")}",
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
-
         private void ShowRequestResponseDetail(ApiRequestLog log)
         {
             var detailForm = new Form
@@ -1370,6 +1419,25 @@ namespace CreateGDAPI
         }
         private void btnResetFilter_Click(object sender, EventArgs e)
         {
+            // Reset combobox endpoint về "All"
+            if (comboFilterEndpoint.Items.Count > 0)
+            {
+                comboFilterEndpoint.SelectedIndex = 0; // "-- All Endpoints --"
+            }
+
+            // ✅ THÊM MỚI: Reset textbox search PartnerRef
+            if (txtSearchPartnerRef != null)
+            {
+                txtSearchPartnerRef.Clear();
+            }
+
+            // Cập nhật lại grid
+            UpdateDetailGrid();
+        }
+        private void txtSearchPartnerRef_TextChanged(object sender, EventArgs e)
+        {
+            // Tùy chọn: Tự động filter khi gõ
+            // Nếu muốn filter chỉ khi nhấn nút, có thể bỏ qua method này
             UpdateDetailGrid();
         }
     }

@@ -263,7 +263,7 @@ namespace CreateGDAPI
             comboCurrency.Items.AddRange(new string[] { "USD" , "VND" });
             comboCurrency.SelectedIndex = 0;
 
-            comboServiceType.Items.AddRange(new string[] { "AD", "WD", "CP", "HD" });
+            comboServiceType.Items.AddRange(new string[] { "AD", "DW", "CP", "HD" });
             comboServiceType.SelectedIndex = 0;
 
             // Load dữ liệu Excel
@@ -283,14 +283,9 @@ namespace CreateGDAPI
             try
             {
                 string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
-                if (!Directory.Exists(logDirectory))
-                {
-                    return;
-                }
+                if (!Directory.Exists(logDirectory)) return;
 
-                string todayLog = Path.Combine(logDirectory,
-                    $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
-
+                string todayLog = Path.Combine(logDirectory, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
                 if (!File.Exists(todayLog))
                 {
                     AppendResult("[INFO] Không tìm thấy log hôm nay.\r\n");
@@ -303,177 +298,110 @@ namespace CreateGDAPI
 
                 int loadedPaid = 0;
                 int loadedCancelled = 0;
-                int loadedError99 = 0;  // ✅ ĐẾM SỐ LƯỢNG LỖI 99
+                int loadedError99 = 0;
+                int loadedPending = 0;
 
                 foreach (var entry in entries)
                 {
-                    // ✅ LOAD TRANSFER TRANSACTIONS (bao gồm cả PAID, PENDING và ERROR 99)
                     if (entry.Contains("TRANSFER") && !entry.Contains("UPDATETRANS"))
                     {
                         string partnerRef = null;
                         string transactionRef = null;
                         string partnerCode = null;
                         string responseCode = null;
-                        bool isPaid = false;
+                        string transactionStatus = null;  // ← THÊM BIẾN NÀY
 
                         var lines = entry.Split('\n');
                         foreach (var line in lines)
                         {
-                            // Extract ResponseCode
                             if (line.Contains("ResponseCode:"))
                             {
                                 var parts = line.Split(':');
                                 if (parts.Length > 1)
-                                {
                                     responseCode = parts[1].Trim();
-                                }
                             }
-
-                            // Extract PartnerRef for PAID
-                            if (line.Contains("🔒 Transaction PAID - PartnerRef:"))
+                            else if (line.Contains("PartnerRef:"))
                             {
-                                var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
+                                var parts = line.Split(':');
                                 if (parts.Length > 1)
-                                {
                                     partnerRef = parts[1].Trim();
-                                    isPaid = true;
-                                }
                             }
-
-                            // Extract TransactionRef
-                            if (line.Contains("🆔 TransactionRef:"))
+                            else if (line.Contains("TransactionRef:"))
                             {
-                                var parts = line.Split(new[] { "TransactionRef:" }, StringSplitOptions.None);
+                                var parts = line.Split(':');
                                 if (parts.Length > 1)
                                 {
                                     transactionRef = parts[1].Trim();
+                                    if (transactionRef == "null" || transactionRef == "")
+                                        transactionRef = null;
                                 }
                             }
-
-                            // Extract PartnerCode from JSON
-                            if (line.Contains("\"partnerCode\""))
+                            // ✅ ĐỌC TRANSACTION STATUS TỪ LOG
+                            else if (line.Contains("TransactionStatus:"))
                             {
-                                var match = System.Text.RegularExpressions.Regex.Match(
-                                    line, @"""partnerCode"":\s*""([^""]+)""");
-                                if (match.Success)
-                                {
-                                    partnerCode = match.Groups[1].Value;
-                                }
-                            }
-
-                            // Extract PartnerRef from JSON if not already found
-                            if (string.IsNullOrEmpty(partnerRef) && line.Contains("\"partnerRef\""))
-                            {
-                                var match = System.Text.RegularExpressions.Regex.Match(
-                                    line, @"""partnerRef"":\s*""([^""]+)""");
-                                if (match.Success)
-                                {
-                                    partnerRef = match.Groups[1].Value;
-                                }
+                                var parts = line.Split(':');
+                                if (parts.Length > 1)
+                                    transactionStatus = parts[1].Trim();
                             }
                         }
 
-                        // ✅ TẠO TRANSACTION INFO CHO MỌI TRANSFER (không chỉ PAID)
-                        if (!string.IsNullOrEmpty(partnerRef) && !string.IsNullOrEmpty(responseCode) && responseCode != "04")
+                        // ✅ TẠO TRANSACTION DỰA TRÊN TRANSACTION STATUS
+                        if (!string.IsNullOrEmpty(partnerRef) && responseCode != "04")
                         {
                             var existingTransaction = _createdTransactions
                                 .FirstOrDefault(t => t.PartnerRef == partnerRef);
 
                             if (existingTransaction == null)
                             {
-                                _createdTransactions.Add(new TransactionInfo
+                                var newTrans = new TransactionInfo
                                 {
                                     PartnerRef = partnerRef,
                                     TransactionRef = transactionRef,
-                                    PartnerCode = partnerCode,
-                                    IsPaid = isPaid,
-                                    IsCancelled = false,
-                                    ResponseCode = responseCode,  // ✅ LƯU RESPONSE CODE TỪ LOG
+                                    PartnerCode = partnerCode ?? "",
+                                    ResponseCode = responseCode ?? "",
                                     CreatedAt = DateTime.Now
-                                });
+                                };
 
-                                if (isPaid)
-                                    loadedPaid++;
-                                else if (responseCode == "99")
-                                    loadedError99++;  // ✅ ĐẾM LỖI 99
-                            }
-                        }
-                    }
-
-                    // ✅ LOAD CANCELLED TRANSACTIONS
-                    if (entry.Contains("🚫 CANCELLED") && entry.Contains("CANCELTRANS"))
-                    {
-                        string partnerRef = null;
-                        string responseCode = null;
-
-                        var lines = entry.Split('\n');
-                        foreach (var line in lines)
-                        {
-                            // Extract ResponseCode
-                            if (line.Contains("ResponseCode:"))
-                            {
-                                var parts = line.Split(':');
-                                if (parts.Length > 1)
+                                // ✅ SET STATUS DỰA TRÊN TRANSACTION STATUS
+                                switch (transactionStatus)
                                 {
-                                    responseCode = parts[1].Trim();
+                                    case "PAID":
+                                        newTrans.IsPaid = true;
+                                        newTrans.IsCancelled = false;
+                                        loadedPaid++;
+                                        break;
+                                    case "CANCELLED":
+                                        newTrans.IsPaid = false;
+                                        newTrans.IsCancelled = true;
+                                        loadedCancelled++;
+                                        break;
+                                    case "ERROR_99":
+                                        newTrans.IsPaid = false;
+                                        newTrans.IsCancelled = false;
+                                        loadedError99++;
+                                        break;
+                                    case "PENDING":
+                                    default:
+                                        newTrans.IsPaid = false;
+                                        newTrans.IsCancelled = false;
+                                        loadedPending++;
+                                        break;
                                 }
-                            }
 
-                            if (line.Contains("❌ Transaction CANCELLED - PartnerRef:"))
-                            {
-                                var parts = line.Split(new[] { "PartnerRef:" }, StringSplitOptions.None);
-                                if (parts.Length > 1)
-                                {
-                                    partnerRef = parts[1].Trim();
-                                }
-                            }
-                        }
-
-                        if (!string.IsNullOrEmpty(partnerRef) && responseCode == "00")
-                        {
-                            var existingTransaction = _createdTransactions
-                                .FirstOrDefault(t => t.PartnerRef == partnerRef);
-
-                            if (existingTransaction != null)
-                            {
-                                existingTransaction.IsCancelled = true;
-                                loadedCancelled++;
-                            }
-                            else
-                            {
-                                // Nếu chưa có trong list, tạo mới với IsCancelled = true
-                                _createdTransactions.Add(new TransactionInfo
-                                {
-                                    PartnerRef = partnerRef,
-                                    IsCancelled = true,
-                                    ResponseCode = responseCode,
-                                    CreatedAt = DateTime.Now
-                                });
-                                loadedCancelled++;
+                                _createdTransactions.Add(newTrans);
                             }
                         }
                     }
                 }
 
-                if (loadedPaid > 0 || loadedCancelled > 0 || loadedError99 > 0)
-                {
-                    AppendResult($"[INFO] ✅ Loaded từ log: {loadedPaid} paid, {loadedCancelled} cancelled, {loadedError99} error-99 transactions\r\n");
-
-                    // Hiển thị thống kê chi tiết hơn
-                    var validTransactions = _createdTransactions.Where(t => t.ResponseCode != "99").Count();
-                    var error99Transactions = _createdTransactions.Where(t => t.ResponseCode == "99").Count();
-
-                    AppendResult($"[INFO] 📊 Transactions khả dụng: {validTransactions} | Lỗi 99 (không khả dụng): {error99Transactions}\r\n");
-
-                    DisplayTransactionStatistics();
-                }
+                AppendResult($"[LOAD LOG] ✅ Loaded: {loadedPaid} PAID, {loadedCancelled} CANCELLED, " +
+                            $"{loadedError99} ERROR_99, {loadedPending} PENDING\r\n");
             }
             catch (Exception ex)
             {
-                AppendResult($"[ERROR] ❌ Error loading transactions: {ex.Message}\r\n");
+                AppendResult($"[LOAD LOG ERROR] ❌ {ex.Message}\r\n");
             }
         }
-
         private void LoadMasterData()
         {
             try
@@ -714,9 +642,9 @@ RESPONSE: {healthResponse.StatusCode}
                     }
 
                     // Lưu TRANSFER transaction
-                    if (endpoint == "transfer" )
+                    if (endpoint == "transfer")
                     {
-                        SaveTransactionInfo(doc.RootElement, responseCode);
+                        SaveTransactionInfo(doc.RootElement, json, responseCode);
                     }
 
                     // Xử lý CANCELTRANS
@@ -830,43 +758,60 @@ RESPONSE: {healthResponse.StatusCode}
             }
         }
 
-        private void SaveTransactionInfo(JsonElement root, string responseCode = "00")
+        private void SaveTransactionInfo(JsonElement responseRoot, string requestJson, string responseCode)
         {
             try
             {
-                string? refNo = root.GetProperty("refNo").GetString();
-                string? partnerRef = root.GetProperty("partnerRef").GetString();
-                string? partnerCode = root.GetProperty("partnerCode").GetString();
-                string? transactionRef = root.TryGetProperty("transactionRef", out var trElement)
+                // Lấy thông tin từ request JSON
+                string partnerRef = "";
+                string partnerCode = "";
+                if (!string.IsNullOrEmpty(requestJson))
+                {
+                    using var reqDoc = JsonDocument.Parse(requestJson);
+                    partnerRef = reqDoc.RootElement.TryGetProperty("partnerRef", out var prProp)
+                        ? prProp.GetString()
+                        : "";
+                    partnerCode = reqDoc.RootElement.TryGetProperty("partnerCode", out var pcProp)
+                        ? pcProp.GetString()
+                        : "";
+                }
+
+                // Lấy thông tin từ response
+                string transactionRef = responseRoot.TryGetProperty("transactionRef", out var trElement)
                     ? trElement.GetString()
                     : null;
-                string? status = root.TryGetProperty("status", out var statusElement)
+
+                string apiStatus = responseRoot.TryGetProperty("status", out var statusElement)
                     ? statusElement.GetString()
                     : "0";
 
-                bool isPaid = status == "200" && !string.IsNullOrEmpty(transactionRef);
+                // ✅ DÙNG HÀM CHUẨN ĐỂ XÁC ĐỊNH STATUS
+                string transactionStatus = DetermineTransactionStatus(
+                    responseCode,
+                    transactionRef,
+                    apiStatus,
+                    partnerRef
+                );
 
                 var info = new TransactionInfo
                 {
-                    RefNo = refNo ?? string.Empty,
-                    PartnerRef = partnerRef ?? string.Empty,
-                    PartnerCode = partnerCode ?? string.Empty,
+                    PartnerRef = partnerRef,
+                    PartnerCode = partnerCode,
                     TransactionRef = transactionRef,
-                    IsPaid = isPaid,
-                    IsCancelled = false,
-                    ResponseCode = responseCode
+                    ResponseCode = responseCode,
+                    IsPaid = (transactionStatus == "PAID"),
+                    IsCancelled = (transactionStatus == "CANCELLED"),
+                    CreatedAt = DateTime.Now
                 };
 
                 _createdTransactions.Add(info);
 
-                if (_createdTransactions.Count > 100)
-                {
-                    _createdTransactions.RemoveAt(0);
-                }
+                //if (_createdTransactions.Count > 100)
+                //{
+                //    _createdTransactions.RemoveAt(0);
+                //}
 
-                Console.WriteLine(isPaid
-                    ? $"✅ Transaction PAID: {partnerRef} (TransactionRef: {transactionRef})"
-                    : $"⏳ Transaction PENDING: {partnerRef} (TransactionRef: {transactionRef ?? "null"})");
+                Console.WriteLine($"💾 Saved: {partnerRef} | Status: {transactionStatus}");
             }
             catch (Exception ex)
             {
@@ -917,7 +862,7 @@ RESPONSE: {healthResponse.StatusCode}
 
             if (currency == "USD")
             {
-                amount = rnd.Next(10, 100).ToString() + ".00";
+                amount = rnd.Next(10, 20000).ToString() + ".00";
                 fee = rnd.Next(1, 10).ToString() + ".00";
             }
 
@@ -1444,36 +1389,49 @@ RESPONSE: {healthResponse.StatusCode}
                 string transactionStatus = "";
 
                 // ✅ XỬ LÝ CHO TRANSFER
-                if (endpoint.ToUpper() == "TRANSFER" )
+                // ✅ XỬ LÝ CHO TRANSFER
+                if (endpoint.ToUpper() == "TRANSFER")
                 {
                     try
                     {
                         using var doc = JsonDocument.Parse(responseJson);
 
-                        string apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
+                        // Lấy API status
+                        var apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
                             ? statusProp.GetString()
-                            : "0";
+                            : "";
 
-                        if (doc.RootElement.TryGetProperty("transactionRef", out var trProp))
+                        // Lấy PartnerRef từ request
+                        if (!string.IsNullOrEmpty(requestJson))
                         {
-                            transactionRef = trProp.GetString();
+                            using var reqDoc = JsonDocument.Parse(requestJson);
+                            partnerRef = reqDoc.RootElement.TryGetProperty("partnerRef", out var prProp)
+                                ? prProp.GetString()
+                                : "";
                         }
 
-                        if (doc.RootElement.TryGetProperty("partnerRef", out var prProp))
-                        {
-                            partnerRef = prProp.GetString();
-                        }
+                        // Lấy TransactionRef từ response
+                        transactionRef = doc.RootElement.TryGetProperty("transactionRef", out var trProp)
+                            ? trProp.GetString()
+                            : null;
 
-                        if (apiStatus == "200" && !string.IsNullOrEmpty(transactionRef))
+                        // ✅ DÙNG HÀM MỚI ĐỂ XÁC ĐỊNH STATUS
+                        transactionStatus = DetermineTransactionStatus(
+                            responseCode,
+                            transactionRef,
+                            apiStatus,
+                            partnerRef
+                        );
+
+                        // Set status marker
+                        statusMarker = transactionStatus switch
                         {
-                            statusMarker = "💰 PAID";
-                            transactionStatus = "PAID";
-                        }
-                        else
-                        {
-                            statusMarker = "⏳ PENDING";
-                            transactionStatus = "PENDING";
-                        }
+                            "PAID" => "💰 PAID",
+                            "CANCELLED" => "🚫 CANCELLED",
+                            "ERROR_99" => "❌ ERROR_99",
+                            "PENDING" => "⏳ PENDING",
+                            _ => ""
+                        };
                     }
                     catch { }
                 }
@@ -1815,7 +1773,7 @@ RESPONSE: {healthResponse.StatusCode}
                     // Kiểm tra số pending (không paid, không cancelled)
                     var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
                             (t.ResponseCode == "05" || t.ResponseCode == "98"));
-                    if (pendingCount >= 5)
+                    if (pendingCount >= 10)
                     {
                         // Đã đủ 5 giao dịch chưa paid, chưa cancel thì dừng
                         break;
@@ -1859,7 +1817,7 @@ RESPONSE: {healthResponse.StatusCode}
                 // ======================================================================
                 AppendResult("[STEP 4] 🚫 Testing CANCELTRANS (3 pending transactions)...\r\n");
                 int cancelCount = 0;
-                int cancelTarget = 3;
+                int cancelTarget = 8;
 
                 for (int i = 0; i < cancelTarget; i++)
                 {
@@ -2217,6 +2175,42 @@ RESPONSE: {healthResponse.StatusCode}
         {
             Properties.Settings.Default.AgencyCode = txtAgencyCode.Text;
             Properties.Settings.Default.Save();
+        }
+        /// <summary>
+        /// Xác định Transaction Status dựa trên ResponseCode và TransactionRef
+        /// </summary>
+        private string DetermineTransactionStatus(
+            string responseCode,
+            string transactionRef,
+            string apiStatus,
+            string partnerRef)
+        {
+            // Kiểm tra cancelled từ memory
+            var memoryTrans = _createdTransactions.FirstOrDefault(t => t.PartnerRef == partnerRef);
+            if (memoryTrans != null && memoryTrans.IsCancelled)
+            {
+                return "CANCELLED";
+            }
+
+            // Logic xác định status
+            if (responseCode == "00" && !string.IsNullOrEmpty(transactionRef))
+            {
+                return "PAID";  // Có responseCode 00 VÀ có transactionRef
+            }
+            else if (responseCode == "99")
+            {
+                return "ERROR_99";  // Lỗi 99
+            }
+            else if (responseCode == "05" || responseCode == "98")
+            {
+                return "PENDING";  // Đang chờ xử lý
+            }
+            else if (responseCode == "00" && string.IsNullOrEmpty(transactionRef))
+            {
+                return "PENDING";  // Có responseCode 00 nhưng chưa có transactionRef
+            }
+
+            return "UNKNOWN";
         }
     }
     };
