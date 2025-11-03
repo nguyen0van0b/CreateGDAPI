@@ -1,4 +1,5 @@
 ﻿using ClosedXML.Excel;
+using DocumentFormat.OpenXml.VariantTypes;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -24,15 +25,14 @@ namespace CreateGDAPI
         private List<string> _countries = new();
         private List<string> _provincesBlackList = new();
         private Dictionary<string, List<string>> _wardsByProvinceName = new();
-        private System.Threading.Timer _batchTimer;
-        private readonly object _lockObj = new object();
-        private int _pendingRequests = 0;
-        private bool _isAutoPushingBatch = false;
         // Danh sách transaction đã tạo để test các API khác
         private List<TransactionInfo> _createdTransactions = new();
 
         // Thêm biến để lưu config
         private FieldsConfig _fieldsConfig;
+        // ✅ THÊM 2 BIẾN MỚI CHO PARALLEL
+        private SemaphoreSlim _semaphore;
+        private int _maxConcurrent = 10;  // Default 10 concurrent
 
         // Auto push variables
         private System.Windows.Forms.Timer _autoTimer;
@@ -46,7 +46,11 @@ namespace CreateGDAPI
             if (DesignMode) return;
             handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
+            handler.MaxConnectionsPerServer = 20;  // ✅ Tăng connection pool
             client = new HttpClient(handler);
+            client.Timeout = TimeSpan.FromSeconds(30);  // ✅ Tăng timeout
+            // ✅ Khởi tạo semaphore
+            _semaphore = new SemaphoreSlim(_maxConcurrent, _maxConcurrent);
 
             // Initialize auto push timer
             _autoTimer = new System.Windows.Forms.Timer();
@@ -55,7 +59,7 @@ namespace CreateGDAPI
             txtAgencyCode.TextChanged += txtAgencyCode_TextChanged;
 
         }
-
+       
         private async void AutoTimer_Tick(object sender, EventArgs e)
         {
             if (!_isAutoPushing) return;
@@ -68,39 +72,21 @@ namespace CreateGDAPI
                 return;
             }
 
+            // ✅ LẤY GIÁ TRỊ TRƯỚC (đã ở UI thread rồi)
             string endpoint = comboApiEndpoint.SelectedItem?.ToString() ?? "healthcheck";
             string partnerCode = txtPartnerCode.Text.Trim();
             string agencyCode = txtAgencyCode.Text.Trim();
 
             _autoPushCount++;
+
+            // ✅ Gọi API
             await SendApiRequest(endpoint, partnerCode, agencyCode, _autoPushCount);
         }
-
-        private void StartAutoPush()
-        {
-            _isAutoPushing = true;
-            _autoPushCount = 0;
-            btnStartAutoPush.Text = "⏸️ Stop Auto Push";
-            btnStartAutoPush.BackColor = Color.FromArgb(255, 128, 128);
-            btnSendRequest.Enabled = false;
-            comboApiEndpoint.Enabled = false;
-
-            AppendResult($"[AUTO PUSH] ▶️ Bắt đầu auto push {_autoPushTarget} requests mỗi {numAutoPushInterval.Value} giây\r\n");
-        }
-
+       
         private void StopAutoPush()
         {
             _isAutoPushing = false;
-            _isAutoPushingBatch = false;
 
-            // Dispose batch timer
-            if (_batchTimer != null)
-            {
-                _batchTimer.Dispose();
-                _batchTimer = null;
-            }
-
-            // Dispose old timer nếu có
             if (_autoTimer != null)
             {
                 _autoTimer.Stop();
@@ -111,10 +97,7 @@ namespace CreateGDAPI
             btnSendRequest.Enabled = true;
             comboApiEndpoint.Enabled = true;
 
-            AppendResult($"[AUTO PUSH] ⏹️ Đã dừng auto push sau {_autoPushCount} requests " +
-                         $"(Pending: {_pendingRequests})\r\n");
-
-            // Hiển thị thống kê
+            // Không cần log ở đây nữa vì đã log trong RunParallelBatch
             DisplayTransactionStatistics();
         }
         private void btnStartAutoPush_Click(object sender, EventArgs e)
@@ -140,110 +123,76 @@ namespace CreateGDAPI
             _autoPushTarget = count;
             _autoPushCount = 0;
             _isAutoPushing = true;
-            _isAutoPushingBatch = true;
-            _pendingRequests = 0;
 
+            // ✅ Lấy max concurrent (nếu có NumericUpDown, nếu không dùng default)
+            // _maxConcurrent = (int)numMaxConcurrent.Value;  // Uncomment nếu có UI
+            _maxConcurrent = 10;  // Hoặc hard-code tạm
 
-            // Gọi hàm đã clean
-            StartAutoPush();
-            // ✅ TÍNH TOÁN INTERVAL DựA trên numAutoPushInterval
-            // VD: numAutoPushInterval = 0.1 giây → 10 requests/second → 100ms interval
-            double intervalSeconds = (double)numAutoPushInterval.Value;
-            int intervalMs = (int)(intervalSeconds * 1000);
+            // ✅ Tạo lại semaphore với max concurrent mới
+            _semaphore?.Dispose();
+            _semaphore = new SemaphoreSlim(_maxConcurrent, _maxConcurrent);
+
+            // ✅ Lấy giá trị từ UI
+            string endpoint = comboApiEndpoint.SelectedItem?.ToString() ?? "healthcheck";
+            string partnerCode = txtPartnerCode.Text.Trim();
+            string agencyCode = txtAgencyCode.Text.Trim();
+
+            btnStartAutoPush.Text = "⏸️ Stop Auto Push";
+            btnStartAutoPush.BackColor = Color.FromArgb(255, 128, 128);
+            btnSendRequest.Enabled = false;
+            comboApiEndpoint.Enabled = false;
 
             AppendResult($"[AUTO PUSH] ▶️ Bắt đầu auto push {_autoPushTarget} requests " +
-                         $"(Interval: {intervalMs}ms = {1000.0 / intervalMs:F1} req/s)\r\n");
+                         $"(Max {_maxConcurrent} concurrent)\r\n");
 
-            // ✅ SỬ DỤNG System.Threading.Timer ĐỂ PUSH NHANH
-            _batchTimer = new System.Threading.Timer(
-                async _ => await ProcessBatchRequest(),
-                null,
-                0,  // Bắt đầu ngay
-                intervalMs  // Lặp lại mỗi intervalMs
-            );
+            // ✅ CHẠY TẤT CẢ REQUESTS SONG SONG
+            Task.Run(async () => await RunBatchWithSemaphore(endpoint, partnerCode, agencyCode));
         }
-        private async Task ProcessBatchRequest()
+
+        // ============================================================
+        // METHOD MỚI - CHẠY BATCH VỚI SEMAPHORE
+        // ============================================================
+        private async Task RunBatchWithSemaphore(string endpoint, string partnerCode, string agencyCode)
         {
-            if (!_isAutoPushingBatch || _autoPushCount >= _autoPushTarget)
+            var tasks = new List<Task>();
+
+            for (int i = 1; i <= _autoPushTarget; i++)
             {
-                if (_autoPushCount >= _autoPushTarget)
-                {
-                    // Stop và thông báo
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        StopAutoPush();
-                        MessageBox.Show($"✅ Đã hoàn thành {_autoPushCount} requests tự động!",
-                            "Auto Push Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    });
-                }
-                return;
-            }
+                if (!_isAutoPushing) break;
 
-            // Giới hạn pending requests
-            lock (_lockObj)
-            {
-                if (_pendingRequests > 50)  // Max 50 pending
-                {
-                    return;
-                }
-                _pendingRequests++;
-            }
+                int requestNumber = i;
 
-            try
-            {
-                string endpoint = null;
-                string partnerCode = null;
-                string agencyCode = null;
-
-                this.Invoke((MethodInvoker)delegate
+                // ✅ Tạo task cho mỗi request
+                var task = Task.Run(async () =>
                 {
-                    endpoint = comboApiEndpoint.SelectedItem?.ToString() ?? "healthcheck";
-                    partnerCode = txtPartnerCode.Text.Trim();
-                    agencyCode = txtAgencyCode.Text.Trim();
-                });
+                    // ✅ Chờ slot từ semaphore (giới hạn concurrent)
+                    await _semaphore.WaitAsync();
 
-                // Fire and forget - không đợi
-                _ = Task.Run(async () =>
-                {
                     try
                     {
-                        int currentCount;
-                        lock (_lockObj)
-                        {
-                            currentCount = ++_autoPushCount;
-                        }
-
-                        await SendApiRequest(endpoint, partnerCode, agencyCode, currentCount);
-
-                        lock (_lockObj)
-                        {
-                            _pendingRequests--;
-                        }
-
-                        // Update UI
-                        this.Invoke((MethodInvoker)delegate
-                        {
-                            // Có thể thêm progress bar nếu muốn
-                        });
+                        int count = Interlocked.Increment(ref _autoPushCount);
+                        await SendApiRequest(endpoint, partnerCode, agencyCode, count);
                     }
-                    catch (Exception ex)
+                    finally
                     {
-                        lock (_lockObj)
-                        {
-                            _pendingRequests--;
-                        }
-                        Console.WriteLine($"❌ Batch request error: {ex.Message}");
+                        // ✅ Giải phóng slot
+                        _semaphore.Release();
                     }
                 });
+
+                tasks.Add(task);
             }
-            catch (Exception ex)
+
+            // ✅ Chờ tất cả hoàn thành
+            await Task.WhenAll(tasks);
+
+            // ✅ Thông báo hoàn thành
+            this.Invoke((MethodInvoker)delegate
             {
-                lock (_lockObj)
-                {
-                    _pendingRequests--;
-                }
-                Console.WriteLine($"❌ Error in batch processing: {ex.Message}");
-            }
+                StopAutoPush();
+                MessageBox.Show($"✅ Đã hoàn thành {_autoPushCount} requests tự động!",
+                    "Auto Push Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            });
         }
         private void Form3_Load(object sender, EventArgs e)
         {
@@ -260,7 +209,7 @@ namespace CreateGDAPI
             });
             comboApiEndpoint.SelectedIndex = 0;
 
-            comboCurrency.Items.AddRange(new string[] { "USD" , "VND" });
+            comboCurrency.Items.AddRange(new string[] { "USD", "VND" });
             comboCurrency.SelectedIndex = 0;
 
             comboServiceType.Items.AddRange(new string[] { "AD", "DW", "CP", "HD" });
@@ -607,7 +556,7 @@ RESPONSE: {healthResponse.StatusCode}
                         AppendResult($"[ERROR] Endpoint không được hỗ trợ: {endpoint}\r\n");
                         return;
                 }
-
+                AppendResult("------------------------"+stt+ "------------------------");
                 await SendPostRequest(url, json, stt, endpoint);
             }
             catch (Exception ex)
@@ -839,11 +788,27 @@ RESPONSE: {healthResponse.StatusCode}
         }
         private string CreateTransferRequest(string partnerCode, string agencyCode)
         {
+            string serviceTypeA = "";
+            string currencyA = "";
+
+            // ✅ Lấy giá trị từ UI thread
+            if (this.InvokeRequired)
+            {
+                this.Invoke((MethodInvoker)delegate
+                {
+                    serviceTypeA = comboServiceType.SelectedItem?.ToString() ?? "AD";
+                    currencyA = comboCurrency.SelectedItem?.ToString() ?? "USD";
+                });
+            }
+            else
+            {
+                serviceTypeA = comboServiceType.SelectedItem?.ToString() ?? "AD";
+                currencyA = comboCurrency.SelectedItem?.ToString() ?? "USD";
+            }
             string refNo = Guid.NewGuid().ToString();
-            string partnerRef = agencyCode + GenerateRandomNumber(12); 
+            //string refNo = Guid.NewGuid().ToString();
+            string partnerRef = agencyCode + GenerateRandomNumber(12);
             string pin = agencyCode + GenerateRandomNumber(6);
-            string serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
-            string currency = comboCurrency.SelectedItem?.ToString() ?? "VND";
 
             string senderName = GenerateRandomName();
             string receiverName = GenerateRandomName();
@@ -860,9 +825,9 @@ RESPONSE: {healthResponse.StatusCode}
             string amount = rnd.Next(10, 100).ToString() + "000000.00";
             string fee = rnd.Next(1, 10).ToString() + "000.00";
 
-            if (currency == "USD")
+            if (currencyA == "USD")
             {
-                amount = rnd.Next(10, 20000).ToString() + ".00";
+                amount = rnd.Next(10, 200).ToString() + ".00";
                 fee = rnd.Next(1, 10).ToString() + ".00";
             }
 
@@ -874,7 +839,6 @@ RESPONSE: {healthResponse.StatusCode}
             {
                 ward = wardsList[rnd.Next(wardsList.Count)];
             }
-
             var root = new Dictionary<string, object?>
             {
                 ["refNo"] = refNo,
@@ -882,16 +846,16 @@ RESPONSE: {healthResponse.StatusCode}
                 ["agencyCode"] = agencyCode,
                 ["partnerRef"] = partnerRef,
                 ["pin"] = pin,
-                ["serviceType"] = serviceType
+                ["serviceType"] = serviceTypeA,
             };
 
             // PHẦN PAYMENT INFO
             var paymentInfo = new Dictionary<string, object?>
             {
                 ["debtAmount"] = amount,
-                ["debtCurrency"] = currency,
+                ["debtCurrency"] = currencyA,
                 ["disbursementAmount"] = amount,
-                ["disbursementCurrency"] = currency
+                ["disbursementCurrency"] = currencyA
             };
 
             // ✅ SỬ DỤNG ShouldAddField
@@ -902,7 +866,7 @@ RESPONSE: {healthResponse.StatusCode}
                 paymentInfo["feeAmount"] = feeAmt ?? fee;
 
             if (ShouldAddField("paymentInfo.feeCurrency", out var feeCur))
-                paymentInfo["feeCurrency"] = feeCur ?? currency;
+                paymentInfo["feeCurrency"] = feeCur ?? currencyA;
 
             root["paymentInfo"] = paymentInfo;
 
@@ -1067,7 +1031,7 @@ RESPONSE: {healthResponse.StatusCode}
                 .Where(t => t.PartnerCode == partnerCode &&
                             !t.IsPaid &&
                             !t.IsCancelled &&
-                            (t.ResponseCode == "05" ||t.ResponseCode == "98"))
+                            (t.ResponseCode == "05" || t.ResponseCode == "98"))
                 .ToList();
 
             if (availableTransactions.Count > 0)
@@ -1267,9 +1231,20 @@ RESPONSE: {healthResponse.StatusCode}
         private void AppendResult(string text)
         {
             if (txtResult.InvokeRequired)
-                txtResult.Invoke(new Action(() => txtResult.AppendText(text)));
+            {
+                txtResult.Invoke((MethodInvoker)delegate
+                {
+                    txtResult.AppendText(text);
+                    txtResult.SelectionStart = txtResult.Text.Length;
+                    txtResult.ScrollToCaret();
+                });
+            }
             else
+            {
                 txtResult.AppendText(text);
+                txtResult.SelectionStart = txtResult.Text.Length;
+                txtResult.ScrollToCaret();
+            }
         }
 
 
@@ -1762,7 +1737,7 @@ RESPONSE: {healthResponse.StatusCode}
                 // ======================================================================
                 AppendResult("[STEP 2] 💸 Testing TRANSFER (min 5 pending, max 500)...\r\n");
                 int transferCount = 0;
-                int maxTransfers = 500;
+                int maxTransfers = 5000;
 
                 while (transferCount < maxTransfers && _isAutoTesting)
                 {
@@ -1773,7 +1748,7 @@ RESPONSE: {healthResponse.StatusCode}
                     // Kiểm tra số pending (không paid, không cancelled)
                     var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
                             (t.ResponseCode == "05" || t.ResponseCode == "98"));
-                    if (pendingCount >= 10)
+                    if (pendingCount >= 50)
                     {
                         // Đã đủ 5 giao dịch chưa paid, chưa cancel thì dừng
                         break;
@@ -1817,7 +1792,7 @@ RESPONSE: {healthResponse.StatusCode}
                 // ======================================================================
                 AppendResult("[STEP 4] 🚫 Testing CANCELTRANS (3 pending transactions)...\r\n");
                 int cancelCount = 0;
-                int cancelTarget = 8;
+                int cancelTarget = 50;
 
                 for (int i = 0; i < cancelTarget; i++)
                 {
@@ -2213,4 +2188,4 @@ RESPONSE: {healthResponse.StatusCode}
             return "UNKNOWN";
         }
     }
-    };
+};
