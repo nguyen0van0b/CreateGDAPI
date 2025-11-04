@@ -17,349 +17,364 @@
 
         private void InitializeComponent()
         {
-            this.groupBox1 = new System.Windows.Forms.GroupBox();
-            this.txtSearch = new System.Windows.Forms.TextBox();
-            this.label1 = new System.Windows.Forms.Label();
-            this.chkFields = new System.Windows.Forms.CheckedListBox();
-            this.groupBox2 = new System.Windows.Forms.GroupBox();
-            this.btnSelectReceiverInfo = new System.Windows.Forms.Button();
-            this.btnSelectSenderInfo = new System.Windows.Forms.Button();
-            this.btnSelectPaymentInfo = new System.Windows.Forms.Button();
-            this.btnDeselectAll = new System.Windows.Forms.Button();
-            this.btnSelectAll = new System.Windows.Forms.Button();
-            this.groupBox3 = new System.Windows.Forms.GroupBox();
-            this.lblBlacklistInfo = new System.Windows.Forms.Label();
-            this.chkUseBlackListOnly = new System.Windows.Forms.CheckBox();
-            this.groupBox4 = new System.Windows.Forms.GroupBox();
-            this.lblStatus = new System.Windows.Forms.Label();
-            this.btnResetDefault = new System.Windows.Forms.Button();
-            this.btnClose = new System.Windows.Forms.Button();
-            this.btnSaveAndClose = new System.Windows.Forms.Button();
-            this.btnSave = new System.Windows.Forms.Button();
-            this.groupBox5 = new System.Windows.Forms.GroupBox();
-            this.btnSetAllNotSend = new System.Windows.Forms.Button();
-            this.btnSetAllNull = new System.Windows.Forms.Button();
-            this.btnResetFieldModes = new System.Windows.Forms.Button();
-            this.lblFieldModeInfo = new System.Windows.Forms.Label();
-            this.comboFieldMode = new System.Windows.Forms.ComboBox();
-            this.label2 = new System.Windows.Forms.Label();
-            this.groupBox1.SuspendLayout();
-            this.groupBox2.SuspendLayout();
-            this.groupBox3.SuspendLayout();
-            this.groupBox4.SuspendLayout();
-            this.groupBox5.SuspendLayout();
-            this.SuspendLayout();
+            groupBox1 = new GroupBox();
+            txtSearch = new TextBox();
+            label1 = new Label();
+            chkFields = new CheckedListBox();
+            groupBox2 = new GroupBox();
+            btnSelectReceiverInfo = new Button();
+            btnSelectSenderInfo = new Button();
+            btnSelectPaymentInfo = new Button();
+            btnDeselectAll = new Button();
+            btnSelectAll = new Button();
+            groupBox3 = new GroupBox();
+            lblBlacklistInfo = new Label();
+            chkUseBlackListOnly = new CheckBox();
+            groupBox4 = new GroupBox();
+            lblStatus = new Label();
+            btnResetDefault = new Button();
+            btnClose = new Button();
+            btnSaveAndClose = new Button();
+            btnSave = new Button();
+            groupBox5 = new GroupBox();
+            btnSetAllNotSend = new Button();
+            btnSetAllNull = new Button();
+            btnResetFieldModes = new Button();
+            lblFieldModeInfo = new Label();
+            comboFieldMode = new ComboBox();
+            label2 = new Label();
+            chkAutoCancelIfNotPaid = new CheckBox();
+            groupBox1.SuspendLayout();
+            groupBox2.SuspendLayout();
+            groupBox3.SuspendLayout();
+            groupBox4.SuspendLayout();
+            groupBox5.SuspendLayout();
+            SuspendLayout();
             // 
             // groupBox1
             // 
-            this.groupBox1.Controls.Add(this.txtSearch);
-            this.groupBox1.Controls.Add(this.label1);
-            this.groupBox1.Controls.Add(this.chkFields);
-            this.groupBox1.Location = new System.Drawing.Point(12, 12);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(500, 500);
-            this.groupBox1.TabIndex = 0;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "📋 Chọn Fields để gửi trong Request";
+            groupBox1.Controls.Add(txtSearch);
+            groupBox1.Controls.Add(label1);
+            groupBox1.Controls.Add(chkFields);
+            groupBox1.Location = new Point(12, 12);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(500, 500);
+            groupBox1.TabIndex = 0;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "📋 Chọn Fields để gửi trong Request";
             // 
             // txtSearch
             // 
-            this.txtSearch.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.txtSearch.Location = new System.Drawing.Point(80, 25);
-            this.txtSearch.Name = "txtSearch";
-            this.txtSearch.PlaceholderText = "Tìm kiếm field...";
-            this.txtSearch.Size = new System.Drawing.Size(410, 25);
-            this.txtSearch.TabIndex = 2;
-            this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
+            txtSearch.Font = new Font("Segoe UI", 10F);
+            txtSearch.Location = new Point(80, 25);
+            txtSearch.Name = "txtSearch";
+            txtSearch.PlaceholderText = "Tìm kiếm field...";
+            txtSearch.Size = new Size(410, 25);
+            txtSearch.TabIndex = 2;
+            txtSearch.TextChanged += txtSearch_TextChanged;
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(15, 30);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(62, 15);
-            this.label1.TabIndex = 1;
-            this.label1.Text = "🔍 Search:";
+            label1.AutoSize = true;
+            label1.Location = new Point(15, 30);
+            label1.Name = "label1";
+            label1.Size = new Size(60, 15);
+            label1.TabIndex = 1;
+            label1.Text = "🔍 Search:";
             // 
             // chkFields
             // 
-            this.chkFields.CheckOnClick = true;
-            this.chkFields.Font = new System.Drawing.Font("Consolas", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.chkFields.FormattingEnabled = true;
-            this.chkFields.Location = new System.Drawing.Point(15, 60);
-            this.chkFields.Name = "chkFields";
-            this.chkFields.Size = new System.Drawing.Size(475, 418);
-            this.chkFields.TabIndex = 0;
+            chkFields.CheckOnClick = true;
+            chkFields.Font = new Font("Consolas", 9F);
+            chkFields.FormattingEnabled = true;
+            chkFields.Location = new Point(15, 60);
+            chkFields.Name = "chkFields";
+            chkFields.Size = new Size(475, 412);
+            chkFields.TabIndex = 0;
             // 
             // groupBox2
             // 
-            this.groupBox2.Controls.Add(this.btnSelectReceiverInfo);
-            this.groupBox2.Controls.Add(this.btnSelectSenderInfo);
-            this.groupBox2.Controls.Add(this.btnSelectPaymentInfo);
-            this.groupBox2.Controls.Add(this.btnDeselectAll);
-            this.groupBox2.Controls.Add(this.btnSelectAll);
-            this.groupBox2.Location = new System.Drawing.Point(530, 12);
-            this.groupBox2.Name = "groupBox2";
-            this.groupBox2.Size = new System.Drawing.Size(280, 250);
-            this.groupBox2.TabIndex = 1;
-            this.groupBox2.TabStop = false;
-            this.groupBox2.Text = "⚡ Quick Actions";
+            groupBox2.Controls.Add(btnSelectReceiverInfo);
+            groupBox2.Controls.Add(btnSelectSenderInfo);
+            groupBox2.Controls.Add(btnSelectPaymentInfo);
+            groupBox2.Controls.Add(btnDeselectAll);
+            groupBox2.Controls.Add(btnSelectAll);
+            groupBox2.Location = new Point(530, 12);
+            groupBox2.Name = "groupBox2";
+            groupBox2.Size = new Size(280, 250);
+            groupBox2.TabIndex = 1;
+            groupBox2.TabStop = false;
+            groupBox2.Text = "⚡ Quick Actions";
             // 
             // btnSelectReceiverInfo
             // 
-            this.btnSelectReceiverInfo.Location = new System.Drawing.Point(15, 160);
-            this.btnSelectReceiverInfo.Name = "btnSelectReceiverInfo";
-            this.btnSelectReceiverInfo.Size = new System.Drawing.Size(250, 35);
-            this.btnSelectReceiverInfo.TabIndex = 4;
-            this.btnSelectReceiverInfo.Text = "✅ Select ReceiverInfo";
-            this.btnSelectReceiverInfo.UseVisualStyleBackColor = true;
-            this.btnSelectReceiverInfo.Click += new System.EventHandler(this.btnSelectReceiverInfo_Click);
+            btnSelectReceiverInfo.Location = new Point(15, 160);
+            btnSelectReceiverInfo.Name = "btnSelectReceiverInfo";
+            btnSelectReceiverInfo.Size = new Size(250, 35);
+            btnSelectReceiverInfo.TabIndex = 4;
+            btnSelectReceiverInfo.Text = "✅ Select ReceiverInfo";
+            btnSelectReceiverInfo.UseVisualStyleBackColor = true;
+            btnSelectReceiverInfo.Click += btnSelectReceiverInfo_Click;
             // 
             // btnSelectSenderInfo
             // 
-            this.btnSelectSenderInfo.Location = new System.Drawing.Point(15, 115);
-            this.btnSelectSenderInfo.Name = "btnSelectSenderInfo";
-            this.btnSelectSenderInfo.Size = new System.Drawing.Size(250, 35);
-            this.btnSelectSenderInfo.TabIndex = 3;
-            this.btnSelectSenderInfo.Text = "✅ Select SenderInfo";
-            this.btnSelectSenderInfo.UseVisualStyleBackColor = true;
-            this.btnSelectSenderInfo.Click += new System.EventHandler(this.btnSelectSenderInfo_Click);
+            btnSelectSenderInfo.Location = new Point(15, 115);
+            btnSelectSenderInfo.Name = "btnSelectSenderInfo";
+            btnSelectSenderInfo.Size = new Size(250, 35);
+            btnSelectSenderInfo.TabIndex = 3;
+            btnSelectSenderInfo.Text = "✅ Select SenderInfo";
+            btnSelectSenderInfo.UseVisualStyleBackColor = true;
+            btnSelectSenderInfo.Click += btnSelectSenderInfo_Click;
             // 
             // btnSelectPaymentInfo
             // 
-            this.btnSelectPaymentInfo.Location = new System.Drawing.Point(15, 70);
-            this.btnSelectPaymentInfo.Name = "btnSelectPaymentInfo";
-            this.btnSelectPaymentInfo.Size = new System.Drawing.Size(250, 35);
-            this.btnSelectPaymentInfo.TabIndex = 2;
-            this.btnSelectPaymentInfo.Text = "✅ Select PaymentInfo";
-            this.btnSelectPaymentInfo.UseVisualStyleBackColor = true;
-            this.btnSelectPaymentInfo.Click += new System.EventHandler(this.btnSelectPaymentInfo_Click);
+            btnSelectPaymentInfo.Location = new Point(15, 70);
+            btnSelectPaymentInfo.Name = "btnSelectPaymentInfo";
+            btnSelectPaymentInfo.Size = new Size(250, 35);
+            btnSelectPaymentInfo.TabIndex = 2;
+            btnSelectPaymentInfo.Text = "✅ Select PaymentInfo";
+            btnSelectPaymentInfo.UseVisualStyleBackColor = true;
+            btnSelectPaymentInfo.Click += btnSelectPaymentInfo_Click;
             // 
             // btnDeselectAll
             // 
-            this.btnDeselectAll.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(128)))));
-            this.btnDeselectAll.Location = new System.Drawing.Point(140, 25);
-            this.btnDeselectAll.Name = "btnDeselectAll";
-            this.btnDeselectAll.Size = new System.Drawing.Size(125, 35);
-            this.btnDeselectAll.TabIndex = 1;
-            this.btnDeselectAll.Text = "❌ Deselect All";
-            this.btnDeselectAll.UseVisualStyleBackColor = false;
-            this.btnDeselectAll.Click += new System.EventHandler(this.btnDeselectAll_Click);
+            btnDeselectAll.BackColor = Color.FromArgb(255, 192, 128);
+            btnDeselectAll.Location = new Point(140, 25);
+            btnDeselectAll.Name = "btnDeselectAll";
+            btnDeselectAll.Size = new Size(125, 35);
+            btnDeselectAll.TabIndex = 1;
+            btnDeselectAll.Text = "❌ Deselect All";
+            btnDeselectAll.UseVisualStyleBackColor = false;
+            btnDeselectAll.Click += btnDeselectAll_Click;
             // 
             // btnSelectAll
             // 
-            this.btnSelectAll.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(128)))), ((int)(((byte)(255)))), ((int)(((byte)(128)))));
-            this.btnSelectAll.Location = new System.Drawing.Point(15, 25);
-            this.btnSelectAll.Name = "btnSelectAll";
-            this.btnSelectAll.Size = new System.Drawing.Size(120, 35);
-            this.btnSelectAll.TabIndex = 0;
-            this.btnSelectAll.Text = "✔️ Select All";
-            this.btnSelectAll.UseVisualStyleBackColor = false;
-            this.btnSelectAll.Click += new System.EventHandler(this.btnSelectAll_Click);
+            btnSelectAll.BackColor = Color.FromArgb(128, 255, 128);
+            btnSelectAll.Location = new Point(15, 25);
+            btnSelectAll.Name = "btnSelectAll";
+            btnSelectAll.Size = new Size(120, 35);
+            btnSelectAll.TabIndex = 0;
+            btnSelectAll.Text = "✔️ Select All";
+            btnSelectAll.UseVisualStyleBackColor = false;
+            btnSelectAll.Click += btnSelectAll_Click;
             // 
             // groupBox3
             // 
-            this.groupBox3.Controls.Add(this.lblBlacklistInfo);
-            this.groupBox3.Controls.Add(this.chkUseBlackListOnly);
-            this.groupBox3.Location = new System.Drawing.Point(530, 270);
-            this.groupBox3.Name = "groupBox3";
-            this.groupBox3.Size = new System.Drawing.Size(280, 100);
-            this.groupBox3.TabIndex = 2;
-            this.groupBox3.TabStop = false;
-            this.groupBox3.Text = "🚫 BlackList Configuration";
+            groupBox3.Controls.Add(lblBlacklistInfo);
+            groupBox3.Controls.Add(chkUseBlackListOnly);
+            groupBox3.Location = new Point(530, 270);
+            groupBox3.Name = "groupBox3";
+            groupBox3.Size = new Size(280, 100);
+            groupBox3.TabIndex = 2;
+            groupBox3.TabStop = false;
+            groupBox3.Text = "🚫 BlackList Configuration";
             // 
             // lblBlacklistInfo
             // 
-            this.lblBlacklistInfo.Location = new System.Drawing.Point(15, 55);
-            this.lblBlacklistInfo.Name = "lblBlacklistInfo";
-            this.lblBlacklistInfo.Size = new System.Drawing.Size(250, 35);
-            this.lblBlacklistInfo.TabIndex = 1;
-            this.lblBlacklistInfo.Text = "ℹ️ Chỉ dùng tỉnh/thành trong BlackList (cột BlackList = 1)";
+            lblBlacklistInfo.Location = new Point(15, 55);
+            lblBlacklistInfo.Name = "lblBlacklistInfo";
+            lblBlacklistInfo.Size = new Size(250, 35);
+            lblBlacklistInfo.TabIndex = 1;
+            lblBlacklistInfo.Text = "ℹ️ Chỉ dùng tỉnh/thành trong BlackList (cột BlackList = 1)";
             // 
             // chkUseBlackListOnly
             // 
-            this.chkUseBlackListOnly.AutoSize = true;
-            this.chkUseBlackListOnly.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
-            this.chkUseBlackListOnly.Location = new System.Drawing.Point(15, 25);
-            this.chkUseBlackListOnly.Name = "chkUseBlackListOnly";
-            this.chkUseBlackListOnly.Size = new System.Drawing.Size(165, 23);
-            this.chkUseBlackListOnly.TabIndex = 0;
-            this.chkUseBlackListOnly.Text = "🔒 Use BlackList Only";
-            this.chkUseBlackListOnly.UseVisualStyleBackColor = true;
+            chkUseBlackListOnly.AutoSize = true;
+            chkUseBlackListOnly.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            chkUseBlackListOnly.Location = new Point(15, 25);
+            chkUseBlackListOnly.Name = "chkUseBlackListOnly";
+            chkUseBlackListOnly.Size = new Size(173, 23);
+            chkUseBlackListOnly.TabIndex = 0;
+            chkUseBlackListOnly.Text = "🔒 Use BlackList Only";
+            chkUseBlackListOnly.UseVisualStyleBackColor = true;
             // 
             // groupBox4
             // 
-            this.groupBox4.Controls.Add(this.lblStatus);
-            this.groupBox4.Controls.Add(this.btnResetDefault);
-            this.groupBox4.Controls.Add(this.btnClose);
-            this.groupBox4.Controls.Add(this.btnSaveAndClose);
-            this.groupBox4.Controls.Add(this.btnSave);
-            this.groupBox4.Location = new System.Drawing.Point(12, 520);
-            this.groupBox4.Name = "groupBox4";
-            this.groupBox4.Size = new System.Drawing.Size(798, 90);
-            this.groupBox4.TabIndex = 3;
-            this.groupBox4.TabStop = false;
-            this.groupBox4.Text = "💾 Save Configuration";
+            groupBox4.Controls.Add(lblStatus);
+            groupBox4.Controls.Add(btnResetDefault);
+            groupBox4.Controls.Add(btnClose);
+            groupBox4.Controls.Add(btnSaveAndClose);
+            groupBox4.Controls.Add(btnSave);
+            groupBox4.Location = new Point(12, 518);
+            groupBox4.Name = "groupBox4";
+            groupBox4.Size = new Size(798, 90);
+            groupBox4.TabIndex = 3;
+            groupBox4.TabStop = false;
+            groupBox4.Text = "💾 Save Configuration";
             // 
             // lblStatus
             // 
-            this.lblStatus.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Italic, System.Drawing.GraphicsUnit.Point);
-            this.lblStatus.Location = new System.Drawing.Point(15, 60);
-            this.lblStatus.Name = "lblStatus";
-            this.lblStatus.Size = new System.Drawing.Size(770, 20);
-            this.lblStatus.TabIndex = 4;
-            this.lblStatus.Text = "Ready";
-            this.lblStatus.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            lblStatus.Font = new Font("Segoe UI", 8F, FontStyle.Italic);
+            lblStatus.Location = new Point(15, 60);
+            lblStatus.Name = "lblStatus";
+            lblStatus.Size = new Size(770, 20);
+            lblStatus.TabIndex = 4;
+            lblStatus.Text = "Ready";
+            lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // btnResetDefault
             // 
-            this.btnResetDefault.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
-            this.btnResetDefault.Location = new System.Drawing.Point(600, 25);
-            this.btnResetDefault.Name = "btnResetDefault";
-            this.btnResetDefault.Size = new System.Drawing.Size(185, 30);
-            this.btnResetDefault.TabIndex = 3;
-            this.btnResetDefault.Text = "🔄 Reset Default";
-            this.btnResetDefault.UseVisualStyleBackColor = false;
-            this.btnResetDefault.Click += new System.EventHandler(this.btnResetDefault_Click);
+            btnResetDefault.BackColor = Color.FromArgb(255, 224, 192);
+            btnResetDefault.Location = new Point(600, 25);
+            btnResetDefault.Name = "btnResetDefault";
+            btnResetDefault.Size = new Size(185, 30);
+            btnResetDefault.TabIndex = 3;
+            btnResetDefault.Text = "🔄 Reset Default";
+            btnResetDefault.UseVisualStyleBackColor = false;
+            btnResetDefault.Click += btnResetDefault_Click;
             // 
             // btnClose
             // 
-            this.btnClose.Location = new System.Drawing.Point(410, 25);
-            this.btnClose.Name = "btnClose";
-            this.btnClose.Size = new System.Drawing.Size(180, 30);
-            this.btnClose.TabIndex = 2;
-            this.btnClose.Text = "❌ Close";
-            this.btnClose.UseVisualStyleBackColor = true;
-            this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
+            btnClose.Location = new Point(410, 25);
+            btnClose.Name = "btnClose";
+            btnClose.Size = new Size(180, 30);
+            btnClose.TabIndex = 2;
+            btnClose.Text = "❌ Close";
+            btnClose.UseVisualStyleBackColor = true;
+            btnClose.Click += btnClose_Click;
             // 
             // btnSaveAndClose
             // 
-            this.btnSaveAndClose.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(128)))), ((int)(((byte)(255)))), ((int)(((byte)(255)))));
-            this.btnSaveAndClose.Location = new System.Drawing.Point(210, 25);
-            this.btnSaveAndClose.Name = "btnSaveAndClose";
-            this.btnSaveAndClose.Size = new System.Drawing.Size(190, 30);
-            this.btnSaveAndClose.TabIndex = 1;
-            this.btnSaveAndClose.Text = "💾 Save && Close";
-            this.btnSaveAndClose.UseVisualStyleBackColor = false;
-            this.btnSaveAndClose.Click += new System.EventHandler(this.btnSaveAndClose_Click);
+            btnSaveAndClose.BackColor = Color.FromArgb(128, 255, 255);
+            btnSaveAndClose.Location = new Point(210, 25);
+            btnSaveAndClose.Name = "btnSaveAndClose";
+            btnSaveAndClose.Size = new Size(190, 30);
+            btnSaveAndClose.TabIndex = 1;
+            btnSaveAndClose.Text = "💾 Save && Close";
+            btnSaveAndClose.UseVisualStyleBackColor = false;
+            btnSaveAndClose.Click += btnSaveAndClose_Click;
             // 
             // btnSave
             // 
-            this.btnSave.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(128)))), ((int)(((byte)(255)))), ((int)(((byte)(128)))));
-            this.btnSave.Location = new System.Drawing.Point(15, 25);
-            this.btnSave.Name = "btnSave";
-            this.btnSave.Size = new System.Drawing.Size(185, 30);
-            this.btnSave.TabIndex = 0;
-            this.btnSave.Text = "💾 Save";
-            this.btnSave.UseVisualStyleBackColor = false;
-            this.btnSave.Click += new System.EventHandler(this.btnSave_Click);
+            btnSave.BackColor = Color.FromArgb(128, 255, 128);
+            btnSave.Location = new Point(15, 25);
+            btnSave.Name = "btnSave";
+            btnSave.Size = new Size(185, 30);
+            btnSave.TabIndex = 0;
+            btnSave.Text = "💾 Save";
+            btnSave.UseVisualStyleBackColor = false;
+            btnSave.Click += btnSave_Click;
             // 
             // groupBox5
             // 
-            this.groupBox5.Controls.Add(this.btnSetAllNotSend);
-            this.groupBox5.Controls.Add(this.btnSetAllNull);
-            this.groupBox5.Controls.Add(this.btnResetFieldModes);
-            this.groupBox5.Controls.Add(this.lblFieldModeInfo);
-            this.groupBox5.Controls.Add(this.comboFieldMode);
-            this.groupBox5.Controls.Add(this.label2);
-            this.groupBox5.Location = new System.Drawing.Point(530, 378);
-            this.groupBox5.Name = "groupBox5";
-            this.groupBox5.Size = new System.Drawing.Size(280, 134);
-            this.groupBox5.TabIndex = 4;
-            this.groupBox5.TabStop = false;
-            this.groupBox5.Text = "🎯 Field Mode (Null/NotSend)";
+            groupBox5.Controls.Add(btnSetAllNotSend);
+            groupBox5.Controls.Add(btnSetAllNull);
+            groupBox5.Controls.Add(btnResetFieldModes);
+            groupBox5.Controls.Add(lblFieldModeInfo);
+            groupBox5.Controls.Add(comboFieldMode);
+            groupBox5.Controls.Add(label2);
+            groupBox5.Location = new Point(530, 378);
+            groupBox5.Name = "groupBox5";
+            groupBox5.Size = new Size(280, 134);
+            groupBox5.TabIndex = 4;
+            groupBox5.TabStop = false;
+            groupBox5.Text = "🎯 Field Mode (Null/NotSend)";
             // 
             // btnSetAllNotSend
             // 
-            this.btnSetAllNotSend.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
-            this.btnSetAllNotSend.Font = new System.Drawing.Font("Segoe UI", 8F);
-            this.btnSetAllNotSend.Location = new System.Drawing.Point(180, 95);
-            this.btnSetAllNotSend.Name = "btnSetAllNotSend";
-            this.btnSetAllNotSend.Size = new System.Drawing.Size(85, 28);
-            this.btnSetAllNotSend.TabIndex = 5;
-            this.btnSetAllNotSend.Text = "🚫 All NotSend";
-            this.btnSetAllNotSend.UseVisualStyleBackColor = false;
-            this.btnSetAllNotSend.Click += new System.EventHandler(this.btnSetAllNotSend_Click);
+            btnSetAllNotSend.BackColor = Color.FromArgb(255, 192, 192);
+            btnSetAllNotSend.Font = new Font("Segoe UI", 8F);
+            btnSetAllNotSend.Location = new Point(180, 95);
+            btnSetAllNotSend.Name = "btnSetAllNotSend";
+            btnSetAllNotSend.Size = new Size(85, 28);
+            btnSetAllNotSend.TabIndex = 5;
+            btnSetAllNotSend.Text = "🚫 All NotSend";
+            btnSetAllNotSend.UseVisualStyleBackColor = false;
+            btnSetAllNotSend.Click += btnSetAllNotSend_Click;
             // 
             // btnSetAllNull
             // 
-            this.btnSetAllNull.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
-            this.btnSetAllNull.Font = new System.Drawing.Font("Segoe UI", 8F);
-            this.btnSetAllNull.Location = new System.Drawing.Point(95, 95);
-            this.btnSetAllNull.Name = "btnSetAllNull";
-            this.btnSetAllNull.Size = new System.Drawing.Size(75, 28);
-            this.btnSetAllNull.TabIndex = 4;
-            this.btnSetAllNull.Text = "⚠️ All Null";
-            this.btnSetAllNull.UseVisualStyleBackColor = false;
-            this.btnSetAllNull.Click += new System.EventHandler(this.btnSetAllNull_Click);
+            btnSetAllNull.BackColor = Color.FromArgb(255, 224, 192);
+            btnSetAllNull.Font = new Font("Segoe UI", 8F);
+            btnSetAllNull.Location = new Point(95, 95);
+            btnSetAllNull.Name = "btnSetAllNull";
+            btnSetAllNull.Size = new Size(75, 28);
+            btnSetAllNull.TabIndex = 4;
+            btnSetAllNull.Text = "⚠️ All Null";
+            btnSetAllNull.UseVisualStyleBackColor = false;
+            btnSetAllNull.Click += btnSetAllNull_Click;
             // 
             // btnResetFieldModes
             // 
-            this.btnResetFieldModes.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
-            this.btnResetFieldModes.Font = new System.Drawing.Font("Segoe UI", 8F);
-            this.btnResetFieldModes.Location = new System.Drawing.Point(15, 95);
-            this.btnResetFieldModes.Name = "btnResetFieldModes";
-            this.btnResetFieldModes.Size = new System.Drawing.Size(70, 28);
-            this.btnResetFieldModes.TabIndex = 3;
-            this.btnResetFieldModes.Text = "🔄 Reset";
-            this.btnResetFieldModes.UseVisualStyleBackColor = false;
-            this.btnResetFieldModes.Click += new System.EventHandler(this.btnResetFieldModes_Click);
+            btnResetFieldModes.BackColor = Color.FromArgb(192, 255, 192);
+            btnResetFieldModes.Font = new Font("Segoe UI", 8F);
+            btnResetFieldModes.Location = new Point(15, 95);
+            btnResetFieldModes.Name = "btnResetFieldModes";
+            btnResetFieldModes.Size = new Size(70, 28);
+            btnResetFieldModes.TabIndex = 3;
+            btnResetFieldModes.Text = "🔄 Reset";
+            btnResetFieldModes.UseVisualStyleBackColor = false;
+            btnResetFieldModes.Click += btnResetFieldModes_Click;
             // 
             // lblFieldModeInfo
             // 
-            this.lblFieldModeInfo.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Italic);
-            this.lblFieldModeInfo.ForeColor = System.Drawing.Color.Gray;
-            this.lblFieldModeInfo.Location = new System.Drawing.Point(15, 68);
-            this.lblFieldModeInfo.Name = "lblFieldModeInfo";
-            this.lblFieldModeInfo.Size = new System.Drawing.Size(250, 20);
-            this.lblFieldModeInfo.TabIndex = 2;
-            this.lblFieldModeInfo.Text = "Select a field to change mode";
+            lblFieldModeInfo.Font = new Font("Segoe UI", 8F, FontStyle.Italic);
+            lblFieldModeInfo.ForeColor = Color.Gray;
+            lblFieldModeInfo.Location = new Point(15, 68);
+            lblFieldModeInfo.Name = "lblFieldModeInfo";
+            lblFieldModeInfo.Size = new Size(250, 20);
+            lblFieldModeInfo.TabIndex = 2;
+            lblFieldModeInfo.Text = "Select a field to change mode";
             // 
             // comboFieldMode
             // 
-            this.comboFieldMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboFieldMode.Enabled = false;
-            this.comboFieldMode.FormattingEnabled = true;
-            this.comboFieldMode.Location = new System.Drawing.Point(15, 40);
-            this.comboFieldMode.Name = "comboFieldMode";
-            this.comboFieldMode.Size = new System.Drawing.Size(250, 23);
-            this.comboFieldMode.TabIndex = 1;
+            comboFieldMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboFieldMode.Enabled = false;
+            comboFieldMode.FormattingEnabled = true;
+            comboFieldMode.Location = new Point(15, 40);
+            comboFieldMode.Name = "comboFieldMode";
+            comboFieldMode.Size = new Size(250, 23);
+            comboFieldMode.TabIndex = 1;
             // 
             // label2
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(15, 22);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(154, 15);
-            this.label2.TabIndex = 0;
-            this.label2.Text = "🎛️ Mode for selected field:";
+            label2.AutoSize = true;
+            label2.Location = new Point(15, 22);
+            label2.Name = "label2";
+            label2.Size = new Size(146, 15);
+            label2.TabIndex = 0;
+            label2.Text = "🎛️ Mode for selected field:";
+            // 
+            // chkAutoCancelIfNotPaid
+            // 
+            chkAutoCancelIfNotPaid.AutoSize = true;
+            chkAutoCancelIfNotPaid.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            chkAutoCancelIfNotPaid.ForeColor = Color.Red;
+            chkAutoCancelIfNotPaid.Location = new Point(12, 614);
+            chkAutoCancelIfNotPaid.Name = "chkAutoCancelIfNotPaid";
+            chkAutoCancelIfNotPaid.Size = new Size(433, 19);
+            chkAutoCancelIfNotPaid.TabIndex = 6;
+            chkAutoCancelIfNotPaid.Text = "🚫 Auto Cancel - Tự động hủy giao dịch ngay khi Transfer trả về NOT PAID";
+            chkAutoCancelIfNotPaid.UseVisualStyleBackColor = true;
             // 
             // FormSettings
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(822, 622);
-            this.Controls.Add(this.groupBox5);
-            this.Controls.Add(this.groupBox4);
-            this.Controls.Add(this.groupBox3);
-            this.Controls.Add(this.groupBox2);
-            this.Controls.Add(this.groupBox1);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.Name = "FormSettings";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "⚙️ Settings - Fields, BlackList & Null Mode";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.FormSettings_FormClosing);
-            this.Load += new System.EventHandler(this.FormSetting_Load);
-            this.groupBox1.ResumeLayout(false);
-            this.groupBox1.PerformLayout();
-            this.groupBox2.ResumeLayout(false);
-            this.groupBox3.ResumeLayout(false);
-            this.groupBox3.PerformLayout();
-            this.groupBox4.ResumeLayout(false);
-            this.groupBox5.ResumeLayout(false);
-            this.groupBox5.PerformLayout();
-            this.ResumeLayout(false);
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(822, 638);
+            Controls.Add(groupBox5);
+            Controls.Add(groupBox4);
+            Controls.Add(groupBox3);
+            Controls.Add(groupBox2);
+            Controls.Add(groupBox1);
+            Controls.Add(chkAutoCancelIfNotPaid);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            Name = "FormSettings";
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "⚙️ Settings - Fields, BlackList & Null Mode";
+            FormClosing += FormSettings_FormClosing;
+            Load += FormSetting_Load;
+            groupBox1.ResumeLayout(false);
+            groupBox1.PerformLayout();
+            groupBox2.ResumeLayout(false);
+            groupBox3.ResumeLayout(false);
+            groupBox3.PerformLayout();
+            groupBox4.ResumeLayout(false);
+            groupBox5.ResumeLayout(false);
+            groupBox5.PerformLayout();
+            ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion
@@ -390,5 +405,6 @@
         private System.Windows.Forms.Button btnResetFieldModes;
         private System.Windows.Forms.Button btnSetAllNull;
         private System.Windows.Forms.Button btnSetAllNotSend;
+        private System.Windows.Forms.CheckBox chkAutoCancelIfNotPaid;
     }
 }

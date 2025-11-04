@@ -80,6 +80,8 @@ namespace CreateGDAPI
             // Subscribe events
             chkFields.SelectedIndexChanged += ChkFields_SelectedIndexChanged;
             comboFieldMode.SelectedIndexChanged += ComboFieldMode_SelectedIndexChanged;
+            // Load Auto Cancel setting
+            chkAutoCancelIfNotPaid.Checked = Properties.Settings.Default.AutoCancelIfNotPaid;
         }
         private void ChkFields_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -228,6 +230,11 @@ namespace CreateGDAPI
         private void btnSave_Click(object sender, EventArgs e)
         {
             SaveConfig();
+            // Save Auto Cancel setting
+            Properties.Settings.Default.AutoCancelIfNotPaid = chkAutoCancelIfNotPaid.Checked;
+
+            // ... existing code ...
+            Properties.Settings.Default.Save();
         }
 
         private void btnSelectAll_Click(object sender, EventArgs e)
@@ -282,6 +289,11 @@ namespace CreateGDAPI
         {
             SaveConfig();
             System.Threading.Thread.Sleep(500); // Delay để user thấy message
+            // Save Auto Cancel setting
+            Properties.Settings.Default.AutoCancelIfNotPaid = chkAutoCancelIfNotPaid.Checked;
+            // ... existing save code ...
+            Properties.Settings.Default.Save();
+
             this.Close();
         }
 

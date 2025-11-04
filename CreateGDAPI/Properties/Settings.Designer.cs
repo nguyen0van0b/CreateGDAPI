@@ -46,5 +46,17 @@ namespace CreateGDAPI.Properties {
                 this["AgencyCode"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AutoCancelIfNotPaid {
+            get {
+                return ((bool)(this["AutoCancelIfNotPaid"]));
+            }
+            set {
+                this["AutoCancelIfNotPaid"] = value;
+            }
+        }
     }
 }

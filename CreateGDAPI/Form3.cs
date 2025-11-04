@@ -711,9 +711,10 @@ RESPONSE: {healthResponse.StatusCode}
         {
             try
             {
-                // Lấy thông tin từ request JSON
                 string partnerRef = "";
                 string partnerCode = "";
+
+                // Lấy PartnerRef và PartnerCode từ request
                 if (!string.IsNullOrEmpty(requestJson))
                 {
                     using var reqDoc = JsonDocument.Parse(requestJson);
@@ -734,7 +735,7 @@ RESPONSE: {healthResponse.StatusCode}
                     ? statusElement.GetString()
                     : "0";
 
-                // ✅ DÙNG HÀM CHUẨN ĐỂ XÁC ĐỊNH STATUS
+                // Xác định transaction status
                 string transactionStatus = DetermineTransactionStatus(
                     responseCode,
                     transactionRef,
@@ -755,20 +756,139 @@ RESPONSE: {healthResponse.StatusCode}
 
                 _createdTransactions.Add(info);
 
-                //if (_createdTransactions.Count > 100)
-                //{
-                //    _createdTransactions.RemoveAt(0);
-                //}
-
                 Console.WriteLine($"💾 Saved: {partnerRef} | Status: {transactionStatus}");
+
+                // *** THÊM CODE NÀY ĐỂ TỰ ĐỘNG CANCEL ***
+                // Lấy agencyCode từ UI
+                string agencyCode = "";
+                if (this.InvokeRequired)
+                {
+                    this.Invoke((MethodInvoker)delegate
+                    {
+                        agencyCode = txtAgencyCode.Text.Trim();
+                    });
+                }
+                else
+                {
+                    agencyCode = txtAgencyCode.Text.Trim();
+                }
+
+                // Gọi auto-cancel (không chờ để không block)
+                _ = Task.Run(async () => await AutoCancelIfNotPaid(partnerRef, partnerCode, agencyCode, transactionStatus));
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Error saving transaction: {ex.Message}");
             }
         }
+        /// <summary>
+        /// Tự động gửi lệnh cancel nếu transfer trả về không phải PAID
+        /// </summary>
+        private async Task AutoCancelIfNotPaid(string partnerRef, string partnerCode, string agencyCode, string transactionStatus)
+        {
+            try
+            {
+                // Kiểm tra setting có bật không
+                if (!Properties.Settings.Default.AutoCancelIfNotPaid)
+                {
+                    return;
+                }
 
+                // Chỉ auto-cancel nếu status không phải PAID
+                if (transactionStatus != "PAID" && transactionStatus != "CANCELLED")
+                {
+                    Console.WriteLine($"🔄 AUTO CANCEL: Preparing to cancel {partnerRef} (Status: {transactionStatus})");
+                    AppendResult($"[AUTO CANCEL] Đang gửi lệnh hủy cho {partnerRef}...\r\n");
+                    var serviceType = "AD";
+                    if (this.InvokeRequired)
+                    {
+                        this.Invoke((MethodInvoker)delegate
+                        {
+                            serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
+                        });
+                    }
+                    else
+                    {
+                        serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
+                    }
+                    // Tạo cancel request
+                    var root = new Dictionary<string, object>
+                    {
+                        ["refNo"] = Guid.NewGuid().ToString(),
+                        ["partnerCode"] = partnerCode,
+                        ["agentCode"] = agencyCode,
+                        ["partnerRef"] = partnerRef,
+                        ["pin"] = "",
+                        ["paymentType"] = serviceType,
+                        ["cancelReason"] = "Auto cancel - Not paid"
+                    };
 
+                    string json = JsonSerializer.Serialize(root, new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
+
+                    // Gửi cancel request
+                    string url = $"https://58.186.16.67/api/partner/canceltrans";
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
+                    var start = DateTime.Now;
+
+                    HttpResponseMessage response = await client.PostAsync(url, content);
+                    string result = await response.Content.ReadAsStringAsync();
+                    var elapsed = DateTime.Now - start;
+
+                    // Parse response
+                    string responseCode = "";
+                    string apiStatus = "";
+
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(result);
+
+                        if (doc.RootElement.TryGetProperty("response", out var responseObj) &&
+                            responseObj.TryGetProperty("responseCode", out var codeProp))
+                        {
+                            responseCode = codeProp.GetString() ?? "";
+                        }
+
+                        apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
+                            ? statusProp.GetString() ?? "0"
+                            : "0";
+                    }
+                    catch { }
+
+                    // Log result
+                    if (responseCode == "00" && apiStatus == "500")
+                    {
+                        Console.WriteLine($"✅ AUTO CANCEL SUCCESS: {partnerRef}");
+                        AppendResult($"[AUTO CANCEL] ✅ Đã hủy thành công {partnerRef}\r\n");
+
+                        // Mark as cancelled in memory
+                        MarkTransactionAsCancelled(partnerRef);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ AUTO CANCEL FAILED: {partnerRef} - ResponseCode: {responseCode}, Status: {apiStatus}");
+                        AppendResult($"[AUTO CANCEL] ❌ Hủy thất bại {partnerRef} (RC: {responseCode})\r\n");
+                    }
+
+                    // Write to log
+                    WriteApiLog("CANCELTRANS",
+                        responseCode == "00" ? "OK" : "ERROR",
+                        (int)elapsed.TotalMilliseconds,
+                        responseCode,
+                        "",
+                        json,
+                        result);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ AUTO CANCEL ERROR: {ex.Message}");
+                AppendResult($"[AUTO CANCEL] ❌ Lỗi: {ex.Message}\r\n");
+            }
+        }
 
         private void MarkTransactionAsCancelled(string partnerRef)
         {
