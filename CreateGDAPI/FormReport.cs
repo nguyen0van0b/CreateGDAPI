@@ -373,6 +373,19 @@ namespace CreateGDAPI
                     {
                         log.ResponseCode = line.Split(':')[1].Trim();
                     }
+                    // ✅ PARSE DURATION
+                    else if (line.StartsWith("Duration:"))
+                    {
+                        var parts = line.Split(':');
+                        if (parts.Length >= 2)
+                        {
+                            var durationText = parts[1].Trim().Replace("ms", "").Trim();
+                            if (int.TryParse(durationText, out int duration))
+                            {
+                                log.Duration = duration;
+                            }
+                        }
+                    }
                     else if (line.StartsWith("PartnerRef:"))
                     {
                         log.PartnerRef = line.Split(':')[1].Trim();

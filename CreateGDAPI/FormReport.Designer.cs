@@ -290,6 +290,7 @@
             this.btnClear.TabIndex = 2;
             this.btnClear.Text = "🗑️ Clear All Data";
             this.btnClear.UseVisualStyleBackColor = false;
+            this.btnClear.Click += new System.EventHandler(this.btnClear_Click);
             // 
             // btnExportExcel
             // 
@@ -301,6 +302,7 @@
             this.btnExportExcel.TabIndex = 1;
             this.btnExportExcel.Text = "📊 Export to Excel";
             this.btnExportExcel.UseVisualStyleBackColor = false;
+            this.btnExportExcel.Click += new System.EventHandler(this.btnExportExcel_Click);
             // 
             // btnRefresh
             // 
@@ -312,6 +314,7 @@
             this.btnRefresh.TabIndex = 0;
             this.btnRefresh.Text = "🔄 Refresh Data";
             this.btnRefresh.UseVisualStyleBackColor = false;
+            this.btnRefresh.Click += new System.EventHandler(this.btnRefresh_Click);
             // 
             // FormReport
             // 
