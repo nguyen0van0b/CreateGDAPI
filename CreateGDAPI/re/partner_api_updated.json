@@ -1,0 +1,200 @@
+{
+  "info": {
+    "_postman_id": "de61b918-ecce-4cde-b492-3274e1a43059",
+    "name": "FastOne - Partner Interface (FULL)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Full Postman Collection generated with all available endpoints including bank list, province list, ward list and partner operations."
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "HealthCheck",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/healthcheck",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "healthcheck"]
+            }
+          }
+        },
+        {
+          "name": "Authentication",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userNameOrEmailAddress\": \"string\",\n  \"password\": \"string\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/authentication",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "authentication"]
+            }
+          }
+        },
+        {
+          "name": "Get Bank List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/getbanklist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "getbanklist"]
+            }
+          }
+        },
+        {
+          "name": "Get Province List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/getprovincelist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "getprovincelist"]
+            }
+          }
+        },
+        {
+          "name": "Get Ward List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/getwardlist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "getwardlist"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Partner Transactions",
+      "item": [
+        {
+          "name": "Transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refNo\": \"{{refNo}}\",\n  \"partnerCode\": \"{{partnerCode}}\",\n  \"agencyCode\": \"{{agencyCode}}\",\n  \"partnerRef\": \"{{partnerRef}}\",\n  \"pin\": \"{{pin}}\",\n  \"serviceType\": \"st\",\n  \"agencyDocCode\": \"string\",\n  \"paymentInfo\": {\n    \"debtAmount\": \"1000000\",\n    \"debtCurrency\": \"VND\",\n    \"disbursementAmount\": \"1000000\",\n    \"disbursementCurrency\": \"VND\",\n    \"exchangeRate\": \"1\",\n    \"feeAmount\": \"0\",\n    \"feeCurrency\": \"VND\"\n  },\n  \"senderInfo\": {\n    \"fullName\": \"Sender Name\",\n    \"phoneNumber\": \"0123456789\",\n    \"documentType\": \"CMND\",\n    \"idNumber\": \"123456789\",\n    \"issueDate\": \"2020-01-01\",\n    \"issuer\": \"CA TPHCM\",\n    \"nationality\": \"VN\",\n    \"gender\": \"Male\",\n    \"doB\": \"1990-01-01\",\n    \"address\": \"Address A\",\n    \"city\": \"HCMC\",\n    \"country\": \"VN\",\n    \"transferPurpose\": \"Family Support\",\n    \"fundSource\": \"Salary\",\n    \"recipientRelationship\": \"Family\",\n    \"content\": \"Transfer note\"\n  },\n  \"receiverInfo\": {\n    \"fullName\": \"Receiver Name\",\n    \"phoneNumber\": \"0987654321\",\n    \"address\": \"Address B\",\n    \"fullName2\": \"string\",\n    \"phoneNumber2\": \"string\",\n    \"address2\": \"string\",\n    \"documentType\": \"CMND\",\n    \"idNumber\": \"987654321\",\n    \"issueDate\": \"2019-01-01\",\n    \"issuer\": \"CA Hanoi\",\n    \"nationality\": \"VN\",\n    \"gender\": \"Female\",\n    \"doB\": \"1992-01-01\",\n    \"ethnicity\": \"Kinh\",\n    \"occupation\": \"Employee\",\n    \"province\": \"01\",\n    \"ward\": \"001\",\n    \"transferPurpose\": \"Family Support\",\n    \"senderRelationship\": \"Family\",\n    \"accountNumber\": \"1234567890\",\n    \"bankCode\": \"970436\",\n    \"bankBranchCode\": \"001\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/transfer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "transfer"]
+            }
+          }
+        },
+        {
+          "name": "Account Inquiry (acctinq)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refNo\": \"{{refNo}}\",\n  \"partnerCode\": \"{{partnerCode}}\",\n  \"receiver\": {\n    \"bankCode\": \"970436\",\n    \"account\": \"1234567890\",\n    \"fullName\": \"Account Holder Name\",\n    \"currency\": \"VND\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/acctinq",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "acctinq"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refNo\": \"{{refNo}}\",\n  \"partnerCode\": \"{{partnerCode}}\",\n  \"agentCode\": \"{{agencyCode}}\",\n  \"partnerRef\": \"{{partnerRef}}\",\n  \"pin\": \"{{pin}}\",\n  \"serviceType\": \"st\",\n  \"cancelReason\": \"Customer request\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/canceltrans",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "canceltrans"]
+            }
+          }
+        },
+        {
+          "name": "Query Information",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refNo\": \"{{refNo}}\",\n  \"partnerCode\": \"{{partnerCode}}\",\n  \"currency\": \"VND\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/queryinfor",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "queryinfor"]
+            }
+          }
+        },
+        {
+          "name": "Transaction Inquiry (transinq)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refNo\": \"{{refNo}}\",\n  \"partnerCode\": \"{{partnerCode}}\",\n  \"partnerRef\": \"{{partnerRef}}\",\n  \"pin\": \"{{pin}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/transinq",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "transinq"]
+            }
+          }
+        },
+        {
+          "name": "Update Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refNo\": \"{{refNo}}\",\n  \"partnerCode\": \"{{partnerCode}}\",\n  \"agencyCode\": \"{{agencyCode}}\",\n  \"partnerRef\": \"{{partnerRef}}\",\n  \"pin\": \"{{pin}}\",\n  \"serviceType\": \"st\",\n  \"updateReason\": \"Update receiver information\",\n  \"receiverInfo\": {\n    \"fullName\": \"Updated Receiver Name\",\n    \"phoneNumber\": \"0987654321\",\n    \"address\": \"Updated Address\",\n    \"fullName2\": \"string\",\n    \"phoneNumber2\": \"string\",\n    \"address2\": \"string\",\n    \"documentType\": \"CMND\",\n    \"idNumber\": \"987654321\",\n    \"issueDate\": \"2019-01-01\",\n    \"issuer\": \"CA Hanoi\",\n    \"nationality\": \"VN\",\n    \"gender\": \"Female\",\n    \"doB\": \"1992-01-01\",\n    \"ethnicity\": \"Kinh\",\n    \"occupation\": \"Employee\",\n    \"province\": \"01\",\n    \"ward\": \"001\",\n    \"transferPurpose\": \"Family Support\",\n    \"senderRelationship\": \"Family\",\n    \"accountNumber\": \"1234567890\",\n    \"bankCode\": \"970436\",\n    \"bankBranchCode\": \"001\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/partner/updatetrans",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partner", "updatetrans"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    { "key": "baseUrl", "value": "https://58.186.16.67" },
+    { "key": "partnerCode", "value": "" },
+    { "key": "agencyCode", "value": "" },
+    { "key": "partnerRef", "value": "TEST001" },
+    { "key": "refNo", "value": "REF001" },
+    { "key": "pin", "value": "" },
+    { "key": "uuid", "value": "UUID-GOES-HERE" }
+  ]
+}

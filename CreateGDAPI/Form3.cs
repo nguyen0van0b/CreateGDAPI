@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -20,6 +21,8 @@ namespace CreateGDAPI
         private readonly Random rnd = new Random();
         private bool _isAutoTesting = false;
         private int _autoTestStep = 0;
+        private string _authToken = "";
+        private bool _isAuthenticated = false;
         private List<(string Code, string Branch)> _banks = new();
         private List<string> _provinces = new();
         private List<string> _countries = new();
@@ -46,18 +49,18 @@ namespace CreateGDAPI
             if (DesignMode) return;
             handler = new HttpClientHandler();
             handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
-            handler.MaxConnectionsPerServer = 20;  // ✅ Tăng connection pool
+            handler.MaxConnectionsPerServer = 20;
             client = new HttpClient(handler);
-            client.Timeout = TimeSpan.FromSeconds(30);  // ✅ Tăng timeout
-            // ✅ Khởi tạo semaphore
+            client.Timeout = TimeSpan.FromSeconds(30);
             _semaphore = new SemaphoreSlim(_maxConcurrent, _maxConcurrent);
 
-            // Initialize auto push timer
             _autoTimer = new System.Windows.Forms.Timer();
             _autoTimer.Tick += AutoTimer_Tick;
             txtPartnerCode.TextChanged += txtPartnerCode_TextChanged;
             txtAgencyCode.TextChanged += txtAgencyCode_TextChanged;
 
+            // ← CALL NEW HELPER: try to load token from env/file and apply it
+            LoadAndApplyAuthToken();
         }
        
         private async void AutoTimer_Tick(object sender, EventArgs e)
@@ -194,7 +197,7 @@ namespace CreateGDAPI
                     "Auto Push Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             });
         }
-        private void Form3_Load(object sender, EventArgs e)
+        private async void Form3_Load(object sender, EventArgs e)
         {
             // Khởi tạo combo boxes
             comboApiEndpoint.Items.AddRange(new string[]
@@ -215,8 +218,8 @@ namespace CreateGDAPI
             comboServiceType.Items.AddRange(new string[] { "AD", "DW", "CP", "HD" });
             comboServiceType.SelectedIndex = 0;
 
-            // Load dữ liệu Excel
-            LoadMasterData();
+            // Load dữ liệu Excel hoặc từ API (thử API trước, fallback Excel)
+            await LoadMasterDataAsync();
 
             // Load fields config
             _fieldsConfig = FormSettings.LoadFieldsConfig();
@@ -488,6 +491,7 @@ namespace CreateGDAPI
 
         private async Task SendApiRequest(string endpoint, string partnerCode, string agencyCode, int stt)
         {
+            ApplyAuthHeader();
             string json = "";
             string url = $"https://58.186.16.67/api/partner/{endpoint}";
 
@@ -569,6 +573,7 @@ RESPONSE: {healthResponse.StatusCode}
         {
             try
             {
+                ApplyAuthHeader();
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var start = DateTime.Now;
 
@@ -786,6 +791,7 @@ RESPONSE: {healthResponse.StatusCode}
         /// </summary>
         private async Task AutoCancelIfNotPaid(string partnerRef, string partnerCode, string agencyCode, string transactionStatus)
         {
+            ApplyAuthHeader();
             try
             {
                 // Kiểm tra setting có bật không
@@ -819,7 +825,7 @@ RESPONSE: {healthResponse.StatusCode}
                         ["agentCode"] = agencyCode,
                         ["partnerRef"] = partnerRef,
                         ["pin"] = "",
-                        ["paymentType"] = serviceType,
+                        ["serviceType"] = serviceType,
                         ["cancelReason"] = "Auto cancel - Not paid"
                     };
 
@@ -832,9 +838,23 @@ RESPONSE: {healthResponse.StatusCode}
                     // Gửi cancel request
                     string url = $"https://58.186.16.67/api/partner/canceltrans";
                     var content = new StringContent(json, Encoding.UTF8, "application/json");
-                    var start = DateTime.Now;
 
-                    HttpResponseMessage response = await client.PostAsync(url, content);
+                    // ✅ TẠO REQUEST VỚI AUTHORIZATION HEADER
+                    HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url)
+                    {
+                        Content = content
+                    };
+
+                    // Thêm Authorization header nếu có token
+                    if (!string.IsNullOrEmpty(_authToken))
+                    {
+                        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
+                    }
+
+                    // Gửi request
+                    var start = DateTime.Now; // <-- FIX: Declare 'start' here
+                    HttpResponseMessage response = await client.SendAsync(request);
+
                     string result = await response.Content.ReadAsStringAsync();
                     var elapsed = DateTime.Now - start;
 
@@ -1175,7 +1195,7 @@ RESPONSE: {healthResponse.StatusCode}
                 ["agentCode"] = agencyCode,
                 ["partnerRef"] = partnerRef,
                 ["pin"] = pin,
-                ["paymentType"] = comboServiceType.SelectedItem?.ToString() ?? "AD",
+                ["serviceType"] = comboServiceType.SelectedItem?.ToString() ?? "AD",
                 ["cancelReason"] = "Customer request"
             };
 
@@ -1996,6 +2016,7 @@ RESPONSE: {healthResponse.StatusCode}
         #region auto test
         private async Task<bool> SendHealthCheckRequest(string partnerCode, string agencyCode, int stt)
         {
+            ApplyAuthHeader();
             string url = $"https://58.186.16.67/api/partner/healthcheck";
             try
             {
@@ -2034,6 +2055,7 @@ RESPONSE: {healthResponse.StatusCode}
         // Helper method cho TRANSINQ
         private async Task SendTransInqRequest(string partnerCode, string partnerRef)
         {
+            ApplyAuthHeader();
             string json = CreateTransInqRequestWithPartnerRef(partnerCode, partnerRef);
             string url = $"https://58.186.16.67/api/partner/transinq";
 
@@ -2074,35 +2096,9 @@ RESPONSE: {healthResponse.StatusCode}
                 WriteApiLog("transinq", "ERROR", 0, "", ex.Message, json, null);
             }
         }
-        private async void btnCancelByList_Click(object sender, EventArgs e)
-        {
-            // Lấy danh sách partnerRef từ textbox, mỗi dòng 1 partnerRef
-            var partnerRefs = txtPartnerRefList.Lines
-                .Select(line => line.Trim())
-                .Where(line => !string.IsNullOrEmpty(line))
-                .ToList();
-
-            if (partnerRefs.Count == 0)
-            {
-                MessageBox.Show("Vui lòng nhập ít nhất 1 partnerRef.");
-                return;
-            }
-
-            string partnerCode = txtPartnerCode.Text.Trim();
-            string agencyCode = txtAgencyCode.Text.Trim();
-
-            int success = 0, fail = 0;
-            foreach (var partnerRef in partnerRefs)
-            {
-                bool result = await CancelTransactionByPartnerRef(partnerCode, agencyCode, partnerRef);
-                if (result) success++; else fail++;
-                await Task.Delay(100); // tránh spam quá nhanh
-            }
-
-            MessageBox.Show($"Đã gửi cancel cho {partnerRefs.Count} partnerRef.\nThành công: {success}, Thất bại: {fail}");
-        }
         private async Task<bool> CancelTransactionByPartnerRef(string partnerCode, string agencyCode, string partnerRef)
         {
+            ApplyAuthHeader();
             try
             {
                 var root = new Dictionary<string, object>
@@ -2112,7 +2108,7 @@ RESPONSE: {healthResponse.StatusCode}
                     ["agentCode"] = agencyCode,
                     ["partnerRef"] = partnerRef,
                     ["pin"] = "",
-                    ["paymentType"] = comboServiceType.SelectedItem?.ToString() ?? "AD",
+                    ["serviceType"] = comboServiceType.SelectedItem?.ToString() ?? "AD",
                     ["cancelReason"] = "Batch cancel"
                 };
 
@@ -2171,6 +2167,7 @@ RESPONSE: {healthResponse.StatusCode}
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             });
         }
+
         // 5. HÀM MỚI: DISPLAY TRANSACTION STATISTICS
         private void DisplayTransactionStatistics()
         {
@@ -2306,6 +2303,424 @@ RESPONSE: {healthResponse.StatusCode}
             }
 
             return "UNKNOWN";
+        }
+
+        // Set token programmatically and apply to client
+        private void SetAuthToken(string token)
+        {
+            _authToken = token ?? "";
+            _isAuthenticated = !string.IsNullOrEmpty(_authToken);
+            ApplyAuthHeader();
+        }
+
+        // Apply or clear Authorization header on HttpClient
+        private void ApplyAuthHeader()
+        {
+            if (client == null) return;
+            try
+            {
+                if (string.IsNullOrEmpty(_authToken))
+                {
+                    client.DefaultRequestHeaders.Authorization = null;
+                    _isAuthenticated = false;
+                }
+                else
+                {
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _authToken);
+                    _isAuthenticated = true;
+                }
+            }
+            catch { }
+        }
+
+        private async void btnCancelByList_Click(object sender, EventArgs e)
+        {
+            var lines = txtPartnerRefList.Text
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim())
+                .Where(l => !string.IsNullOrEmpty(l))
+                .Distinct()
+                .ToList();
+
+            if (lines.Count == 0)
+            {
+                MessageBox.Show("Nhập ít nhất một partnerRef (mỗi dòng một mã).");
+                return;
+            }
+
+            string partnerCode = txtPartnerCode.Text.Trim();
+            string agencyCode = txtAgencyCode.Text.Trim();
+
+            btnCancelByList.Enabled = false;
+            AppendResult($"[CANCEL BY LIST] ▶️ Sending {lines.Count} cancel requests...\r\n");
+
+            int success = 0, failed = 0;
+            foreach (var partnerRef in lines)
+            {
+                try
+                {
+                    AppendResult($"[CANCEL BY LIST] Sending cancel for {partnerRef}...\r\n");
+                    bool ok = await CancelTransactionByPartnerRef(partnerCode, agencyCode, partnerRef);
+                    if (ok)
+                    {
+                        success++;
+                        MarkTransactionAsCancelled(partnerRef);
+                        AppendResult($"[CANCEL BY LIST] ✅ Cancel succeeded: {partnerRef}\r\n");
+                    }
+                    else
+                    {
+                        failed++;
+                        AppendResult($"[CANCEL BY LIST] ❌ Cancel failed: {partnerRef}\r\n");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    AppendResult($"[CANCEL BY LIST] ❌ Error for {partnerRef}: {ex.Message}\r\n");
+                }
+
+                // gentle throttle to avoid burst
+                await Task.Delay(150);
+            }
+
+            AppendResult($"[CANCEL BY LIST] Completed. Success: {success}, Failed: {failed}\r\n");
+            btnCancelByList.Enabled = true;
+        }
+
+        private void LoadAndApplyAuthToken()
+        {
+            try
+            {
+                // 1) Try environment variable first
+                string token = Environment.GetEnvironmentVariable("CREATEGDAPI_AUTH_TOKEN");
+
+                // 2) Fallback to file `auth.token` in app base folder
+                var tokenPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "auth.token");
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    if (File.Exists(tokenPath))
+                        token = File.ReadAllText(tokenPath, Encoding.UTF8).Trim();
+                }
+
+                // 3) (Optional) If you add a Settings property `AuthToken`, uncomment:
+                // if (string.IsNullOrWhiteSpace(token))
+                //     token = Properties.Settings.Default.AuthToken?.Trim();
+
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    SetAuthToken(token);
+                    AppendResult("[INFO] ✅ Auth token loaded and applied.\r\n");
+                }
+                else
+                {
+                    AppendResult("[INFO] ℹ️ No auth token found (env/file/setting). Attempting authentication API...\r\n");
+
+                    // Run auth in background so constructor / UI thread is not blocked
+                    _ = Task.Run(async () =>
+                    {
+                        // Replace with actual credentials or read securely from config
+                        const string user = "phuocls1";
+                        const string pwd = "123456a@A";
+
+                        var tokenFromApi = await RetrieveAuthTokenFromApiAsync(user, pwd).ConfigureAwait(false);
+                        if (!string.IsNullOrWhiteSpace(tokenFromApi))
+                        {
+                            try
+                            {
+                                // Save to file for next runs
+                                File.WriteAllText(tokenPath, tokenFromApi, Encoding.UTF8);
+                            }
+                            catch { /* ignore save errors */ }
+
+                            // Apply token on UI thread
+                            if (this.IsHandleCreated)
+                            {
+                                this.Invoke((MethodInvoker)delegate
+                                {
+                                    SetAuthToken(tokenFromApi);
+                                    AppendResult("[AUTH] ✅ Token retrieved and applied from authentication API.\r\n");
+                                });
+                            }
+                            else
+                            {
+                                // If form handle not created, just set token
+                                SetAuthToken(tokenFromApi);
+                            }
+                        }
+                        else
+                        {
+                            if (this.IsHandleCreated)
+                            {
+                                this.Invoke((MethodInvoker)delegate
+                                {
+                                    AppendResult("[AUTH] ❌ Failed to retrieve token from authentication API.\r\n");
+                                });
+                            }
+                            else
+                            {
+                                AppendResult("[AUTH] ❌ Failed to retrieve token from authentication API.\r\n");
+                            }
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[INFO] Failed to load auth token: {ex.Message}\r\n");
+            }
+        }
+
+        private async Task<string?> RetrieveAuthTokenFromApiAsync(string username, string password)
+        {
+            try
+            {
+                if (client == null) return null;
+
+                string url = "https://58.186.16.67/api/partner/authentication";
+                var payload = new
+                {
+                    userNameOrEmailAddress = username,
+                    password = password
+                };
+
+                var options = new JsonSerializerOptions
+                {
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                    WriteIndented = false
+                };
+
+                var json = JsonSerializer.Serialize(payload, options);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var resp = await client.PostAsync(url, content).ConfigureAwait(false);
+                var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(body);
+
+                    // Try common locations for a token
+                    if (doc.RootElement.TryGetProperty("result", out var resultElem) && resultElem.ValueKind == JsonValueKind.Object)
+                    {
+                        if (resultElem.TryGetProperty("accessToken", out var at) && at.ValueKind == JsonValueKind.String)
+                            return at.GetString();
+
+                        if (resultElem.TryGetProperty("token", out var tkn) && tkn.ValueKind == JsonValueKind.String)
+                            return tkn.GetString();
+                    }
+
+                    if (doc.RootElement.TryGetProperty("accessToken", out var at2) && at2.ValueKind == JsonValueKind.String)
+                        return at2.GetString();
+
+                    if (doc.RootElement.TryGetProperty("token", out var t2) && t2.ValueKind == JsonValueKind.String)
+                        return t2.GetString();
+
+                    // fallback: try to find any string property named "*token*"
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (prop.Name.IndexOf("token", StringComparison.OrdinalIgnoreCase) >= 0 && prop.Value.ValueKind == JsonValueKind.String)
+                            return prop.Value.GetString();
+                    }
+                }
+                catch { /* parse failure - return null */ }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[AUTH ERROR] ❌ {ex.Message}\r\n");
+                return null;
+            }
+        }
+
+        private async Task<List<(string Code, string Branch)>> FetchBankListAsync()
+        {
+            try
+            {
+                ApplyAuthHeader();
+                string url = "https://58.186.16.67/api/partner/getbanklist";
+                HttpResponseMessage resp = await client.GetAsync(url);
+                if (!resp.IsSuccessStatusCode) return new List<(string, string)>();
+
+                string body = await resp.Content.ReadAsStringAsync();
+                var list = new List<(string, string)>();
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(body);
+                    var root = doc.RootElement;
+
+                    if (root.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in root.EnumerateArray())
+                        {
+                            string code = "";
+                            string branch = "";
+
+                            if (el.TryGetProperty("code", out var pCode) || el.TryGetProperty("bankCode", out pCode) || el.TryGetProperty("bankcode", out pCode))
+                                code = pCode.GetString() ?? "";
+
+                            if (el.TryGetProperty("branch", out var pBranch) || el.TryGetProperty("bankBranch", out pBranch) || el.TryGetProperty("bankBranchCode", out pBranch))
+                                branch = pBranch.GetString() ?? "";
+
+                            if (!string.IsNullOrWhiteSpace(code))
+                                list.Add((code.Trim(), branch?.Trim() ?? ""));
+                        }
+                    }
+                }
+                catch { /* ignore parse errors */ }
+
+                return list;
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[API BANKS ERROR] ❌ {ex.Message}\r\n");
+                return new List<(string, string)>();
+            }
+        }
+
+        private async Task<List<string>> FetchProvinceListAsync()
+        {
+            try
+            {
+                ApplyAuthHeader();
+                string url = "https://58.186.16.67/api/partner/getprovincelist";
+                HttpResponseMessage resp = await client.GetAsync(url);
+                if (!resp.IsSuccessStatusCode) return new List<string>();
+
+                string body = await resp.Content.ReadAsStringAsync();
+                var list = new List<string>();
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(body);
+                    var root = doc.RootElement;
+
+                    if (root.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in root.EnumerateArray())
+                        {
+                            string name = "";
+                            if (el.TryGetProperty("name", out var pName) || el.TryGetProperty("provinceName", out pName) || el.TryGetProperty("province", out pName))
+                                name = pName.GetString() ?? "";
+
+                            if (!string.IsNullOrWhiteSpace(name))
+                                list.Add(name.Trim());
+                        }
+                    }
+                }
+                catch { /* ignore parse errors */ }
+
+                return list;
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[API PROVINCES ERROR] ❌ {ex.Message}\r\n");
+                return new List<string>();
+            }
+        }
+
+        private async Task<Dictionary<string, List<string>>> FetchWardListAsync()
+        {
+            try
+            {
+                ApplyAuthHeader();
+                string url = "https://58.186.16.67/api/partner/getwardlist";
+                HttpResponseMessage resp = await client.GetAsync(url);
+                if (!resp.IsSuccessStatusCode) return new Dictionary<string, List<string>>();
+
+                string body = await resp.Content.ReadAsStringAsync();
+                var dict = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(body);
+                    var root = doc.RootElement;
+
+                    if (root.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in root.EnumerateArray())
+                        {
+                            string ward = "";
+                            string province = "";
+
+                            if (el.TryGetProperty("ward", out var pWard) || el.TryGetProperty("wardName", out pWard) || el.TryGetProperty("name", out pWard))
+                                ward = pWard.GetString() ?? "";
+
+                            if (el.TryGetProperty("province", out var pProv) || el.TryGetProperty("provinceName", out pProv) || el.TryGetProperty("city", out pProv))
+                                province = pProv.GetString() ?? "";
+
+                            if (string.IsNullOrEmpty(province)) province = "Unknown";
+
+                            if (!string.IsNullOrEmpty(ward))
+                            {
+                                if (!dict.ContainsKey(province))
+                                    dict[province] = new List<string>();
+
+                                dict[province].Add(ward.Trim());
+                            }
+                        }
+                    }
+                }
+                catch { /* ignore parse errors */ }
+
+                return dict;
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[API WARDS ERROR] ❌ {ex.Message}\r\n");
+                return new Dictionary<string, List<string>>();
+            }
+        }
+
+        private async Task LoadMasterDataAsync()
+        {
+            try
+            {
+                // Try load from API first (non-blocking network)
+                var apiBanks = await FetchBankListAsync();
+                var apiProvinces = await FetchProvinceListAsync();
+                var apiWards = await FetchWardListAsync();
+
+                bool usedApi = false;
+
+                if (apiBanks != null && apiBanks.Count > 0)
+                {
+                    _banks = apiBanks;
+                    usedApi = true;
+                    AppendResult("[INFO] ✅ Loaded bank list from API.\r\n");
+                }
+
+                if (apiProvinces != null && apiProvinces.Count > 0)
+                {
+                    _provinces = apiProvinces;
+                    usedApi = true;
+                    AppendResult("[INFO] ✅ Loaded province list from API.\r\n");
+                }
+
+                if (apiWards != null && apiWards.Count > 0)
+                {
+                    _wardsByProvinceName = apiWards;
+                    usedApi = true;
+                    AppendResult("[INFO] ✅ Loaded ward list from API.\r\n");
+                }
+
+                // If any API list is empty, fallback to Excel files
+                if (!usedApi)
+                {
+                    AppendResult("[INFO] ℹ️ API data not available, fallback to Excel files.\r\n");
+                    string basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+                    _banks = LoadBankCodes(Path.Combine(basePath, "MasterBanksList.xlsx"));
+                    LoadProvincesWithBlackList(Path.Combine(basePath, "MasterProvincesList.xlsx"));
+                    LoadWardsByProvinceName(Path.Combine(basePath, "MasterWardsList.xlsx"));
+                    _countries = LoadListFromExcel(Path.Combine(basePath, "MasterCountriesList.xlsx"), 3);
+                    AppendResult("[INFO] ✅ Load dữ liệu từ Excel hoàn thành.\r\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[LOAD MASTER ERROR] ❌ {ex.Message}\r\n");
+            }
         }
     }
 };
