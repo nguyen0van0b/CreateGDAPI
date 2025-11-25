@@ -662,19 +662,27 @@ RESPONSE: {healthResponse.StatusCode}
                         responseCode = codeProp.GetString() ?? "";
                     }
 
+                    // Materialize response JSON synchronously while `doc` is alive
+                    string responseJson = doc.RootElement.GetRawText();
+
                     // Lưu TRANSFER transaction (fire-and-forget as before)
                     if (string.Equals(endpoint, "transfer", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Save but do not treat 05/12 as API failure; SaveTransactionInfo will map status correctly
-                        _ = Task.Run(() => SaveTransactionInfo(doc.RootElement, json, responseCode));
+                        _ = Task.Run(() => SaveTransactionInfo(responseJson, json, responseCode));
                     }
 
                     // Xử lý CANCELTRANS: nếu API trả responseCode == "00", coi là success và mark cancelled
                     if (string.Equals(endpoint, "canceltrans", StringComparison.OrdinalIgnoreCase) &&
                         !string.IsNullOrEmpty(responseCode) && responseCode == "00")
                     {
-                        if (doc.RootElement.TryGetProperty("partnerRef", out var prProp))
-                            partnerRef = prProp.GetString() ?? "";
+                        // Use the materialized string to parse partnerRef safely
+                        try
+                        {
+                            using var prDoc = JsonDocument.Parse(responseJson);
+                            if (prDoc.RootElement.TryGetProperty("partnerRef", out var prProp))
+                                partnerRef = prProp.GetString() ?? "";
+                        }
+                        catch { /* ignore parse issues */ }
 
                         if (string.IsNullOrEmpty(partnerRef) && !string.IsNullOrEmpty(json))
                         {
@@ -709,7 +717,9 @@ RESPONSE: {healthResponse.StatusCode}
                 string formattedRequest = FormatJsonForLog(json);
                 string formattedResponse = FormatJsonForLog(result);
 
-                string status = responseCode == "00" ? "SUCCESS" : "FAILED";
+                // New classification: fail when responseCode is "99" or empty/whitespace; otherwise success
+                string status = (string.IsNullOrWhiteSpace(responseCode) || responseCode == "99") ? "FAILED" : "SUCCESS";
+
                 int durationMs = (int)elapsed.TotalMilliseconds;
                 WriteApiLog(endpoint, status, durationMs, responseCode, null, formattedRequest, formattedResponse);
             }
@@ -788,7 +798,8 @@ RESPONSE: {healthResponse.StatusCode}
             }
         }
 
-        private void SaveTransactionInfo(JsonElement responseRoot, string requestJson, string responseCode)
+        // replace the existing SaveTransactionInfo(JsonElement...) with this version
+        private void SaveTransactionInfo(string responseJson, string requestJson, string responseCode)
         {
             try
             {
@@ -799,31 +810,30 @@ RESPONSE: {healthResponse.StatusCode}
                 {
                     using var reqDoc = JsonDocument.Parse(requestJson);
                     partnerRef = reqDoc.RootElement.TryGetProperty("partnerRef", out var prProp)
-                        ? prProp.GetString()
+                        ? prProp.GetString() ?? ""
                         : "";
                     partnerCode = reqDoc.RootElement.TryGetProperty("partnerCode", out var pcProp)
-                        ? pcProp.GetString()
+                        ? pcProp.GetString() ?? ""
                         : "";
                 }
 
-                string transactionRef = responseRoot.TryGetProperty("transactionRef", out var trElement)
+                using var doc = JsonDocument.Parse(responseJson);
+                var responseRoot = doc.RootElement;
+
+                string? transactionRef = responseRoot.TryGetProperty("transactionRef", out var trElement)
                     ? trElement.GetString()
                     : null;
 
                 string apiStatus = responseRoot.TryGetProperty("status", out var statusElement)
-                    ? statusElement.GetString()
+                    ? statusElement.GetString() ?? "0"
                     : "0";
 
-                string transactionStatus = DetermineTransactionStatus(
-                    responseCode,
-                    transactionRef,
-                    apiStatus,
-                    partnerRef
-                );
+                // ... rest of original logic unchanged (DetermineTransactionStatus, build TransactionInfo, save, etc.)
+                string transactionStatus = DetermineTransactionStatus(responseCode, transactionRef ?? "", apiStatus, partnerRef);
 
                 var info = new TransactionInfo
                 {
-                    RefNo = Guid.NewGuid().ToString(), // hoặc lấy từ request
+                    RefNo = Guid.NewGuid().ToString(),
                     PartnerRef = partnerRef,
                     PartnerCode = partnerCode,
                     TransactionRef = transactionRef,
@@ -833,41 +843,29 @@ RESPONSE: {healthResponse.StatusCode}
                     CreatedAt = DateTime.Now
                 };
 
-                // Lưu vào memory
                 _createdTransactions.Add(info);
-
-                // ✅ LƯU VÀO DATABASE
                 if (_dbHelper != null)
-                {
                     _ = Task.Run(async () => await _dbHelper.UpsertTransactionInfoAsync(ToGlobalTransactionInfo(info)));
-                }
 
-                Console.WriteLine($"💾 Saved: {partnerRef} | Status: {transactionStatus}");
-
-                // Auto cancel if needed
+                // invoke AutoCancelIfNotPaid as before
                 string agencyCode = "";
                 if (this.InvokeRequired)
                 {
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        agencyCode = txtAgencyCode.Text.Trim();
-                    });
+                    this.Invoke((MethodInvoker)delegate { agencyCode = txtAgencyCode.Text.Trim(); });
                 }
                 else
                 {
                     agencyCode = txtAgencyCode.Text.Trim();
                 }
-
                 _ = Task.Run(async () => await AutoCancelIfNotPaid(partnerRef, partnerCode, agencyCode, transactionStatus));
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Error saving transaction: {ex.Message}");
             }
-        }
-        /// <summary>
-          /// Tự động gửi lệnh cancel nếu transfer trả về không phải PAID
-          /// </summary>
+        }     /// <summary>
+              /// Tự động gửi lệnh cancel nếu transfer trả về không phải PAID
+              /// </summary>
         private async Task AutoCancelIfNotPaid(string partnerRef, string partnerCode, string agencyCode, string transactionStatus)
         {
             ApplyAuthHeader();
@@ -879,108 +877,141 @@ RESPONSE: {healthResponse.StatusCode}
                     return;
                 }
 
-                // Chỉ auto-cancel nếu status không phải PAID
-                if (transactionStatus != "PAID" && transactionStatus != "CANCELLED")
+                // Chỉ auto-cancel nếu status không phải PAID hoặc CANCELLED
+                if (transactionStatus == "PAID" || transactionStatus == "CANCELLED")
                 {
-                    Console.WriteLine($"🔄 AUTO CANCEL: Preparing to cancel {partnerRef} (Status: {transactionStatus})");
-                    AppendResult($"[AUTO CANCEL] Đang gửi lệnh hủy cho {partnerRef}...\r\n");
-                    var serviceType = "AD";
-                    if (this.InvokeRequired)
-                    {
-                        this.Invoke((MethodInvoker)delegate
-                        {
-                            serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
-                        });
-                    }
-                    else
+                    return;
+                }
+
+                Console.WriteLine($"🔄 AUTO CANCEL: Preparing to cancel {partnerRef} (Status: {transactionStatus})");
+                AppendResult($"[AUTO CANCEL] Đang gửi lệnh hủy cho {partnerRef}...\r\n");
+                var serviceType = "AD";
+                if (this.InvokeRequired)
+                {
+                    this.Invoke((MethodInvoker)delegate
                     {
                         serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
-                    }
-                    // Tạo cancel request
-                    var root = new Dictionary<string, object>
-                    {
-                        ["refNo"] = Guid.NewGuid().ToString(),
-                        ["partnerCode"] = partnerCode,
-                        ["agentCode"] = agencyCode,
-                        ["partnerRef"] = partnerRef,
-                        ["pin"] = "",
-                        ["serviceType"] = serviceType,
-                        ["cancelReason"] = "Auto cancel - Not paid"
-                    };
-
-                    string json = JsonSerializer.Serialize(root, new JsonSerializerOptions
-                    {
-                        WriteIndented = true,
-                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                     });
-
-                    // Gửi cancel request
-                    string url = $"https://58.186.16.67/api/partner/canceltrans";
-                    var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                    // ✅ TẠO REQUEST VỚI AUTHORIZATION HEADER
-                    HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url)
-                    {
-                        Content = content
-                    };
-
-                    // Thêm Authorization header nếu có token
-                    if (!string.IsNullOrEmpty(_authToken))
-                    {
-                        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
-                    }
-
-                    // Gửi request
-                    var start = DateTime.Now; // <-- FIX: Declare 'start' here
-                    HttpResponseMessage response = await client.SendAsync(request);
-
-                    string result = await response.Content.ReadAsStringAsync();
-                    var elapsed = DateTime.Now - start;
-
-                    // Parse response
-                    string responseCode = "";
-                    string apiStatus = "";
-
-                    try
-                    {
-                        using var doc = JsonDocument.Parse(result);
-
-                        if (doc.RootElement.TryGetProperty("response", out var responseObj) &&
-                            responseObj.TryGetProperty("responseCode", out var codeProp))
-                        {
-                            responseCode = codeProp.GetString() ?? "";
-                        }
-
-                        apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
-                            ? statusProp.GetString() ?? "0"
-                            : "0";
-                    }
-                    catch { }
-
-                    // Log result
-                    if (responseCode == "00" && apiStatus == "500")
-                    {
-                        Console.WriteLine($"✅ AUTO CANCEL SUCCESS: {partnerRef}");
-                        AppendResult($"[AUTO CANCEL] ✅ Đã hủy thành công {partnerRef}\r\n");
-
-                        // Mark as cancelled in memory
-                        MarkTransactionAsCancelled(partnerRef);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"❌ AUTO CANCEL FAILED: {partnerRef} - ResponseCode: {responseCode}, Status: {apiStatus}");
-                        AppendResult($"[AUTO CANCEL] ❌ Hủy thất bại {partnerRef} (RC: {responseCode})\r\n");
-                    }
-
-                    // Write to log
-                    WriteApiLog("CANCELTRANS",
-                        responseCode == "00" ? "OK" : "ERROR",
-                        (int)elapsed.TotalMilliseconds,
-                        responseCode,
-                        "",
-                        json,
-                        result);
                 }
+                else
+                {
+                    serviceType = comboServiceType.SelectedItem?.ToString() ?? "AD";
+                }
+                // Tạo cancel request
+                var root = new Dictionary<string, object>
+                {
+                    ["refNo"] = Guid.NewGuid().ToString(),
+                    ["partnerCode"] = partnerCode,
+                    ["agentCode"] = agencyCode,
+                    ["partnerRef"] = partnerRef,
+                    ["pin"] = "",
+                    ["serviceType"] = serviceType,
+                    ["cancelReason"] = "Auto cancel - Not paid"
+                };
+
+                string json = JsonSerializer.Serialize(root, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+
+                // Gửi cancel request
+                string url = $"https://58.186.16.67/api/partner/canceltrans";
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                // ✅ TẠO REQUEST VỚI AUTHORIZATION HEADER
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = content
+                };
+
+                // Thêm Authorization header nếu có token
+                if (!string.IsNullOrEmpty(_authToken))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
+                }
+
+                // Gửi request
+                var start = DateTime.Now;
+                HttpResponseMessage response = await client.SendAsync(request);
+
+                string result = await response.Content.ReadAsStringAsync();
+                var elapsed = DateTime.Now - start;
+
+                // Parse response
+                string responseCode = "";
+                string apiStatus = "";
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(result);
+
+                    if (doc.RootElement.TryGetProperty("response", out var responseObj) &&
+                        responseObj.TryGetProperty("responseCode", out var codeProp))
+                    {
+                        responseCode = codeProp.GetString() ?? "";
+                    }
+
+                    apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
+                        ? statusProp.GetString() ?? ""
+                        : "";
+                }
+                catch { }
+
+                // Treat any response.responseCode == "00" as successful cancel (accept "500" or "SUCCESS" in status)
+                if (responseCode == "00")
+                {
+                    Console.WriteLine($"✅ AUTO CANCEL SUCCESS: {partnerRef} (rc={responseCode}, status={apiStatus})");
+                    AppendResult($"[AUTO CANCEL] ✅ Đã hủy thành công {partnerRef}\r\n");
+
+                    // Mark as cancelled in memory (this also schedules TransactionInfos update)
+                    MarkTransactionAsCancelled(partnerRef);
+
+                    // Update database: set IsCancelled in TransactionInfos and mark ApiRequestLogs
+                    if (_dbHelper != null)
+                    {
+                        try
+                        {
+                            // Ensure transaction table is updated (await to guarantee persistence)
+                            await _dbHelper.UpdateTransactionStatusAsync(partnerRef, isCancelled: true);
+
+                            // Update ApiRequestLogs rows that belong to this partnerRef
+                            bool updated = await _dbHelper.UpdateApiRequestLogStatusAsync(partnerRef, "CANCELLED", true);
+                            if (updated)
+                            {
+                                AppendResult($"[DB] ✅ Updated ApiRequestLogs for {partnerRef}\r\n");
+                            }
+
+                            // Also update plain log file for UI/readability
+                            try
+                            {
+                                string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+                                string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
+                                UpdatePendingToCancelled(logPath, partnerRef);
+                                UpdateLogFileForCancelled(partnerRef);
+                            }
+                            catch { }
+                        }
+                        catch (Exception ex)
+                        {
+                            AppendResult($"[DB] ❌ Failed to update DB for cancel {partnerRef}: {ex.Message}\r\n");
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"❌ AUTO CANCEL FAILED: {partnerRef} - ResponseCode: {responseCode}, Status: {apiStatus}");
+                    AppendResult($"[AUTO CANCEL] ❌ Hủy thất bại {partnerRef} (RC: {responseCode})\r\n");
+                }
+
+                // Write to log
+                WriteApiLog("CANCELTRANS",
+                    responseCode == "00" ? "OK" : "ERROR",
+                    (int)elapsed.TotalMilliseconds,
+                    responseCode,
+                    "",
+                    json,
+                    result);
             }
             catch (Exception ex)
             {
@@ -1668,7 +1699,7 @@ RESPONSE: {healthResponse.StatusCode}
                         }
                     }
                 }
-                catch { }
+                catch { /* parse failure - return null */ }
 
                 // ✅ LƯU VÀO DATABASE
                 if (_dbHelper != null)
@@ -2157,10 +2188,7 @@ RESPONSE: {healthResponse.StatusCode}
                         responseCode = codeProp.GetString();
                     }
                 }
-                catch
-                {
-                    responseCode = "(parse error)";
-                }
+                catch { }
 
                 string formattedRequest = FormatJsonForLog(json);
                 string formattedResponse = FormatJsonForLog(result);
@@ -2686,7 +2714,7 @@ RESPONSE: {healthResponse.StatusCode}
                             if (el.TryGetProperty("name", out var pName) || el.TryGetProperty("provinceName", out pName) || el.TryGetProperty("province", out pName))
                                 name = pName.GetString() ?? "";
 
-                            if (!string.IsNullOrWhiteSpace(name))
+                            if (!string.IsNullOrEmpty(name))
                                 list.Add(name.Trim());
                         }
                     }
