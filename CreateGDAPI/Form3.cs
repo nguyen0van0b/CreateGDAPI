@@ -2354,12 +2354,12 @@ RESPONSE: {healthResponse.StatusCode}
             btnCancelByList.Enabled = false;
             AppendResult($"[CANCEL BY LIST] ▶️ Sending {lines.Count} cancel requests...\r\n");
 
-            int success = 0, failed = 0;
+            int success = 0, failed = 0,stt=1;
             foreach (var partnerRef in lines)
             {
                 try
                 {
-                    AppendResult($"[CANCEL BY LIST] Sending cancel for {partnerRef}...\r\n");
+                    AppendResult($"[CANCEL BY LIST] Sending {stt} cancel for {partnerRef}...\r\n");
                     bool ok = await CancelTransactionByPartnerRef(partnerCode, agencyCode, partnerRef);
                     if (ok)
                     {
@@ -2372,6 +2372,7 @@ RESPONSE: {healthResponse.StatusCode}
                         failed++;
                         AppendResult($"[CANCEL BY LIST] ❌ Cancel failed: {partnerRef}\r\n");
                     }
+                    stt++;
                 }
                 catch (Exception ex)
                 {
