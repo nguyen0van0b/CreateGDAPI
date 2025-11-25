@@ -53,13 +53,15 @@ namespace CreateGDAPI
         private string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
         // ✅ THÊM BIẾN CHO SORTING
         private SortOrder _currentSortOrder = SortOrder.None;
-        private string _currentSortColumn = "";
+        private string _currentSortColumn = ""; 
+        private DatabaseHelper _dbHelper;
         public FormReport()
         {
             InitializeComponent();
         }
 
-        private void FormReport_Load(object sender, EventArgs e)
+        // Change the event handler to async Task
+        private async void FormReport_Load(object sender, EventArgs e)
         {
             dtpFrom.Value = DateTime.Now.Date;
             dtpTo.Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1);
@@ -83,7 +85,7 @@ namespace CreateGDAPI
             dgvDetails.ColumnHeaderMouseClick += DgvDetails_ColumnHeaderMouseClick;
             dgvStatistics.ColumnHeaderMouseClick += DgvStatistics_ColumnHeaderMouseClick;
             txtSearchPartnerRef.TextChanged += txtSearchPartnerRef_TextChanged;
-            LoadLogs();
+
             // ✅ Ensure proper DataGridView settings
             dgvDetails.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvDetails.MultiSelect = false;
@@ -102,6 +104,29 @@ namespace CreateGDAPI
             dgvDetails.CellMouseLeave += (s, e) => {
                 dgvDetails.Cursor = Cursors.Default;
             };
+
+            string connStr = System.Configuration.ConfigurationManager
+        .ConnectionStrings["CreateGDAPI_DB"].ConnectionString;
+            _dbHelper = new DatabaseHelper(connStr);
+
+            // Load all logs from database (replaces reading from text files)
+            await LoadLogsFromDatabase();
+
+            // Initialize paging helpers (if you still want paging UI)
+            InitializePagingHelpers();
+        }
+        private async Task LoadLogsFromDatabase()
+        {
+            // Load all records within the selected date range and filters directly from DB
+            // Pass a large maxRecords (GetApiLogsAsync uses TOP (@MaxRecords)); if table huge, consider paging.
+            _logs = await _dbHelper.GetApiLogsAsync(
+                fromDate: dtpFrom.Value,
+                toDate: dtpTo.Value,
+                endpoint: comboFilterEndpoint.SelectedItem?.ToString() == "-- All Endpoints --" ? null : comboFilterEndpoint.SelectedItem?.ToString(),
+                partnerRef: txtSearchPartnerRef?.Text?.Trim(),
+                maxRecords: int.MaxValue
+            );
+
             UpdateStatistics();
             UpdateDetailGrid();
         }
@@ -268,51 +293,14 @@ namespace CreateGDAPI
       
         private void LoadLogs()
         {
-            _logs.Clear();
-
-            if (!Directory.Exists(logDirectory))
-            {
-                MessageBox.Show("Thư mục log không tồn tại!");
-                return;
-            }
-
-            var logFiles = Directory.GetFiles(logDirectory, "logs_all_apis_*.txt");
-
-            foreach (var file in logFiles)
-            {
-                ParseLogFile(file);
-            }
-
-            lblTotalRequests.Text = $"📊 Tổng số requests: {_logs.Count}";
-        }
-
-        private void ParseLogFile(string filePath)
-        {
-            try
-            {
-                string content = File.ReadAllText(filePath, Encoding.UTF8);
-                var logBlocks = content.Split(new[] { "----------------------------------------------------" },
-                    StringSplitOptions.RemoveEmptyEntries);
-
-                foreach (var block in logBlocks)
-                {
-                    if (string.IsNullOrWhiteSpace(block)) continue;
-
-                    var log = ParseLogEntry(block);
-                    if (log != null)
-                    {
-                        _logs.Add(log);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // Ignore parsing errors
-            }
+            // Removed: reading from text files. All data now comes from database.
+            // Kept method as empty placeholder in case designer wires it; prefer calling LoadLogsFromDatabase().
         }
 
         private ApiRequestLog ParseLogEntry(string logEntry)
         {
+            // Kept ParseLogEntry logic only if you still want to parse legacy txt files.
+            // For pure DB mode this method is unused.
             try
             {
                 var log = new ApiRequestLog();
@@ -778,7 +766,7 @@ namespace CreateGDAPI
                      endpointCellValue == "CANCELTRANS" || endpointCellValue == "UPDATETRANS") &&
                     row.Cells["TransactionStatus"].Value != null)
                 {
-                    string txStatus = row.Cells["TransactionStatus"].Value?.ToString() ?? "";
+                    string txStatus = row.Cells["TransactionStatus"].Value?.ToString() ??"";
 
                     if (txStatus == "PAID")
                     {
@@ -1277,12 +1265,11 @@ namespace CreateGDAPI
             UpdateDetailGrid();
         }
 
-        private void btnRefresh_Click(object sender, EventArgs e)
+        private async void btnRefresh_Click(object sender, EventArgs e)
         {
-            LoadLogs();
-            UpdateStatistics();
-            UpdateDetailGrid();
-            MessageBox.Show("Đã refresh dữ liệu!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            // Reload all data from database
+            await LoadLogsFromDatabase();
+            MessageBox.Show("Đã refresh dữ liệu từ database!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void btnExportExcel_Click(object sender, EventArgs e)
@@ -1418,8 +1405,25 @@ namespace CreateGDAPI
             var endpoint = dgvStatistics.Rows[e.RowIndex].Cells["Endpoint"].Value?.ToString();
             if (string.IsNullOrEmpty(endpoint)) return;
 
+            // Set combobox to selected endpoint (if present in list)
+            for (int i = 0; i < comboFilterEndpoint.Items.Count; i++)
+            {
+                if (string.Equals(comboFilterEndpoint.Items[i]?.ToString(), endpoint, StringComparison.OrdinalIgnoreCase))
+                {
+                    comboFilterEndpoint.SelectedIndex = i;
+                    break;
+                }
+            }
+
+            // Clear partner ref and refNo search boxes to focus on endpoint filter
+            if (txtSearchPartnerRef != null) txtSearchPartnerRef.Clear();
+            var refBox = this.Controls.Find("txtSearchRefNo", true);
+            if (refBox.Length > 0 && refBox[0] is TextBox tbRef) tbRef.Clear();
+
+            // Load details filtered by the endpoint
             UpdateDetailGrid(endpoint);
 
+            // Optional: show count (calculate using current _logs filtered)
             var filtered = _logs.Where(l =>
                 l.Endpoint == endpoint &&
                 l.Timestamp >= dtpFrom.Value &&
@@ -1438,20 +1442,161 @@ namespace CreateGDAPI
                 comboFilterEndpoint.SelectedIndex = 0; // "-- All Endpoints --"
             }
 
-            // ✅ THÊM MỚI: Reset textbox search PartnerRef
+            // Reset partnerRef and refNo textboxes (if exists)
             if (txtSearchPartnerRef != null)
             {
                 txtSearchPartnerRef.Clear();
             }
+            var refBox = this.Controls.Find("txtSearchRefNo", true);
+            if (refBox.Length > 0 && refBox[0] is TextBox tbRef)
+            {
+                tbRef.Clear();
+            }
 
-            // Cập nhật lại grid
+            // Cập nhật lại grid (will pick up cleared filters)
             UpdateDetailGrid();
         }
         private void txtSearchPartnerRef_TextChanged(object sender, EventArgs e)
         {
-            // Tùy chọn: Tự động filter khi gõ
-            // Nếu muốn filter chỉ khi nhấn nút, có thể bỏ qua method này
+            // Debounce already exists elsewhere; this keeps immediate filtering behavior.
             UpdateDetailGrid();
+        }
+
+        // If you add a TextBox named txtSearchRefNo on the form, wire its TextChanged to this handler:
+        private void txtSearchRefNo_TextChanged(object sender, EventArgs e)
+        {
+            UpdateDetailGrid();
+        }
+
+        // Paging members
+        // 1. Thêm các biến thành viên private cho paging:
+        private int _currentPage = 1;
+        private int _pageSize = 200; // tunable
+        private int _totalRecords = 0;
+        private int _totalPages = 0;
+
+        // Cancellation + debounce
+        private CancellationTokenSource _cts;
+        private System.Windows.Forms.Timer _searchDebounceTimer;
+
+        // 2. Tạo phương thức khởi tạo các biến paging (paging helpers)
+        private void InitializePagingHelpers()
+        {
+            // Debounce timer for search box
+            _searchDebounceTimer = new System.Windows.Forms.Timer();
+            _searchDebounceTimer.Interval = 350; // ms
+            _searchDebounceTimer.Tick += (s, e) =>
+            {
+                _searchDebounceTimer.Stop();
+                _ = LoadPageAsync(1);
+            };
+
+            // Wire text changed to debounce
+            txtSearchPartnerRef.TextChanged -= txtSearchPartnerRef_TextChanged;
+            txtSearchPartnerRef.TextChanged += (s, e) =>
+            {
+                _searchDebounceTimer.Stop();
+                _searchDebounceTimer.Start();
+            };
+
+            // You can wire next/prev buttons if present (example names)
+            // btnNextPage.Click += async (s,e) => await LoadPageAsync(_currentPage + 1);
+            // btnPrevPage.Click += async (s,e) => await LoadPageAsync(_currentPage - 1);
+        }
+
+        // 3. Tạo phương thức LoadPageAsync để tải dữ liệu cho một trang
+        // Gọi phương thức này từ FormReport_Load sau khi _dbHelper được khởi tạo
+        private async Task LoadPageAsync(int pageNumber)
+        {
+            try
+            {
+                _cts?.Cancel();
+                _cts = new CancellationTokenSource();
+                var token = _cts.Token;
+
+                if (pageNumber < 1) pageNumber = 1;
+                _currentPage = pageNumber;
+
+                string partnerFilter = txtSearchPartnerRef?.Text?.Trim();
+                string endpointFilter = comboFilterEndpoint?.SelectedItem?.ToString();
+                if (endpointFilter == "-- All Endpoints --") endpointFilter = null;
+
+                // 1) get total count
+                var countTask = _dbHelper.GetApiLogsCountAsync(
+                    fromDate: dtpFrom.Value,
+                    toDate: dtpTo.Value,
+                    endpoint: endpointFilter,
+                    partnerRef: partnerFilter
+                );
+
+                // 2) get page
+                var pageTask = _dbHelper.GetApiLogsPageAsync(
+                    pageNumber: _currentPage,
+                    pageSize: _pageSize,
+                    fromDate: dtpFrom.Value,
+                    toDate: dtpTo.Value,
+                    endpoint: endpointFilter,
+                    partnerRef: partnerFilter,
+                    sortColumn: "Timestamp",
+                    sortDirection: "DESC"
+                );
+
+                await Task.WhenAll(countTask, pageTask);
+
+                token.ThrowIfCancellationRequested();
+
+                _totalRecords = countTask.Result;
+                _totalPages = Math.Max(1, (int)Math.Ceiling(_totalRecords / (double)_pageSize));
+
+                _logs = pageTask.Result ?? new List<ApiRequestLog>();
+
+                // Update UI on UI thread
+                dgvDetails.Invoke(() =>
+                {
+                    UpdateStatistics(); // optionally update stats from server or compute from current page
+                    dgvDetails.DataSource = new List<ApiRequestLog>(_logs); // bind page
+                    if (dgvDetails.Columns.Count > 0)
+                    {
+                        ConfigureDetailGridColumns();
+                        ApplyDetailGridFormatting();
+                    }
+                });
+
+                UpdatePagingInfo();
+            }
+            catch (OperationCanceledException) { /* ignore */ }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi tải trang dữ liệu: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdatePagingInfo()
+        {
+            // If you have a label to show paging, update it; otherwise debug
+            // Example: lblPageInfo.Text = $"Page {_currentPage}/{_totalPages} ({_totalRecords} rows)";
+            // If label doesn't exist, ignore silently
+            try
+            {
+                var lbl = this.Controls.Find("lblPageInfo", true);
+                if (lbl.Length > 0 && lbl[0] is Label pageLabel)
+                {
+                    pageLabel.Text = $"Page {_currentPage}/{_totalPages} ({_totalRecords} rows)";
+                }
+            }
+            catch { }
+        }
+
+        // Simple helpers to go prev/next
+        private async Task GoNextPageAsync()
+        {
+            if (_currentPage < _totalPages)
+                await LoadPageAsync(_currentPage + 1);
+        }
+        private async Task GoPrevPageAsync()
+        {
+            if (_currentPage > 1)
+                await LoadPageAsync(_currentPage - 1);
         }
     }
 }

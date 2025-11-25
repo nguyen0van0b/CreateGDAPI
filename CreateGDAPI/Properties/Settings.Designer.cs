@@ -25,7 +25,7 @@ namespace CreateGDAPI.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        [global::System.Configuration.DefaultSettingValueAttribute("DOITACTESTAPI")]
         public string PartnerCode {
             get {
                 return ((string)(this["PartnerCode"]));

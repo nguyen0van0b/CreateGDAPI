@@ -3,7 +3,7 @@
   <Profiles />
   <Settings>
     <Setting Name="PartnerCode" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">DOITACTESTAPI</Value>
     </Setting>
     <Setting Name="AgencyCode" Type="System.String" Scope="User">
       <Value Profile="(Default)" />

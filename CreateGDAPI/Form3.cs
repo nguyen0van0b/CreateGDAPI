@@ -3,6 +3,7 @@ using DocumentFormat.OpenXml.VariantTypes;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Configuration; // ← THÊM DÒNG NÀY
 using System.Data;
 using System.Drawing;
 using System.Linq;
@@ -30,7 +31,7 @@ namespace CreateGDAPI
         private Dictionary<string, List<string>> _wardsByProvinceName = new();
         // Danh sách transaction đã tạo để test các API khác
         private List<TransactionInfo> _createdTransactions = new();
-
+        private DatabaseHelper _dbHelper;
         // Thêm biến để lưu config
         private FieldsConfig _fieldsConfig;
         // ✅ THÊM 2 BIẾN MỚI CHO PARALLEL
@@ -224,11 +225,77 @@ namespace CreateGDAPI
             // Load fields config
             _fieldsConfig = FormSettings.LoadFieldsConfig();
 
-            // ✅ THÊM: Load paid transactions từ log
-            LoadPaidTransactionsFromLog();
+            // ✅ KHỞI TẠO DATABASE HELPER
+            try
+            {
+                string connStr = System.Configuration.ConfigurationManager
+                    .ConnectionStrings["CreateGDAPI_DB"]?.ConnectionString;
 
+                if (string.IsNullOrEmpty(connStr))
+                {
+                    AppendResult("[DB] ⚠️ Connection string not found, using file-based logging\r\n");
+                }
+                else
+                {
+                    _dbHelper = new DatabaseHelper(connStr);
+
+                    bool connected = await _dbHelper.TestConnectionAsync();
+                    if (connected)
+                    {
+                        AppendResult("[DB] ✅ Connected to SQL Server\r\n");
+
+                        // Load existing transactions from database
+                        await LoadTransactionsFromDatabase();
+                    }
+                    else
+                    {
+                        AppendResult("[DB] ❌ Failed to connect to SQL Server - using file logging\r\n");
+                        _dbHelper = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[DB] ❌ Database init error: {ex.Message}\r\n");
+                _dbHelper = null;
+            }
             txtPartnerCode.Text = Properties.Settings.Default.PartnerCode;
             txtAgencyCode.Text = Properties.Settings.Default.AgencyCode;
+        }
+        // Thêm method load transactions từ database
+        private async Task LoadTransactionsFromDatabase()
+        {
+            try
+            {
+                if (_dbHelper == null) return;
+
+                var transactions = await _dbHelper.GetTransactionInfosAsync();
+
+                foreach (var trans in transactions)
+                {
+                    // Chỉ add nếu chưa có trong memory
+                    if (!_createdTransactions.Any(t => t.PartnerRef == trans.PartnerRef))
+                    {
+                        _createdTransactions.Add(new TransactionInfo
+                        {
+                            RefNo = trans.RefNo,
+                            PartnerRef = trans.PartnerRef,
+                            PartnerCode = trans.PartnerCode,
+                            TransactionRef = trans.TransactionRef,
+                            IsPaid = trans.IsPaid,
+                            IsCancelled = trans.IsCancelled,
+                            ResponseCode = trans.ResponseCode,
+                            CreatedAt = trans.CreatedAt
+                        });
+                    }
+                }
+
+                AppendResult($"[DB] ✅ Loaded {transactions.Count} transactions from database\r\n");
+            }
+            catch (Exception ex)
+            {
+                AppendResult($"[DB] ❌ Load transactions error: {ex.Message}\r\n");
+            }
         }
         private void LoadPaidTransactionsFromLog()
         {
@@ -595,33 +662,42 @@ RESPONSE: {healthResponse.StatusCode}
                         responseCode = codeProp.GetString() ?? "";
                     }
 
-                    // Lưu TRANSFER transaction
-                    if (endpoint == "transfer")
+                    // Lưu TRANSFER transaction (fire-and-forget as before)
+                    if (string.Equals(endpoint, "transfer", StringComparison.OrdinalIgnoreCase))
                     {
-                        SaveTransactionInfo(doc.RootElement, json, responseCode);
+                        // Save but do not treat 05/12 as API failure; SaveTransactionInfo will map status correctly
+                        _ = Task.Run(() => SaveTransactionInfo(doc.RootElement, json, responseCode));
                     }
 
-                    // Xử lý CANCELTRANS
-                    if (endpoint == "canceltrans" && responseCode == "00")
+                    // Xử lý CANCELTRANS: nếu API trả responseCode == "00", coi là success và mark cancelled
+                    if (string.Equals(endpoint, "canceltrans", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrEmpty(responseCode) && responseCode == "00")
                     {
-                        string? apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
-                            ? statusProp.GetString()
-                            : "0";
-
                         if (doc.RootElement.TryGetProperty("partnerRef", out var prProp))
-                        {
                             partnerRef = prProp.GetString() ?? "";
+
+                        if (string.IsNullOrEmpty(partnerRef) && !string.IsNullOrEmpty(json))
+                        {
+                            try
+                            {
+                                using var reqDoc = JsonDocument.Parse(json);
+                                if (reqDoc.RootElement.TryGetProperty("partnerRef", out var rpr))
+                                    partnerRef = rpr.GetString() ?? "";
+                            }
+                            catch { }
                         }
 
-                        if (apiStatus == "500" && !string.IsNullOrEmpty(partnerRef))
+                        partnerRef = partnerRef?.Trim();
+                        if (!string.IsNullOrEmpty(partnerRef))
                         {
-                            // Update in-memory transaction
                             MarkTransactionAsCancelled(partnerRef);
-
-                            // Update log file với format chuẩn
-                            string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
-                            string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
-                            UpdatePendingToCancelled(logPath, partnerRef);
+                            try
+                            {
+                                string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+                                string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
+                                UpdatePendingToCancelled(logPath, partnerRef);
+                            }
+                            catch { }
                         }
                     }
                 }
@@ -719,7 +795,6 @@ RESPONSE: {healthResponse.StatusCode}
                 string partnerRef = "";
                 string partnerCode = "";
 
-                // Lấy PartnerRef và PartnerCode từ request
                 if (!string.IsNullOrEmpty(requestJson))
                 {
                     using var reqDoc = JsonDocument.Parse(requestJson);
@@ -731,7 +806,6 @@ RESPONSE: {healthResponse.StatusCode}
                         : "";
                 }
 
-                // Lấy thông tin từ response
                 string transactionRef = responseRoot.TryGetProperty("transactionRef", out var trElement)
                     ? trElement.GetString()
                     : null;
@@ -740,7 +814,6 @@ RESPONSE: {healthResponse.StatusCode}
                     ? statusElement.GetString()
                     : "0";
 
-                // Xác định transaction status
                 string transactionStatus = DetermineTransactionStatus(
                     responseCode,
                     transactionRef,
@@ -750,6 +823,7 @@ RESPONSE: {healthResponse.StatusCode}
 
                 var info = new TransactionInfo
                 {
+                    RefNo = Guid.NewGuid().ToString(), // hoặc lấy từ request
                     PartnerRef = partnerRef,
                     PartnerCode = partnerCode,
                     TransactionRef = transactionRef,
@@ -759,12 +833,18 @@ RESPONSE: {healthResponse.StatusCode}
                     CreatedAt = DateTime.Now
                 };
 
+                // Lưu vào memory
                 _createdTransactions.Add(info);
+
+                // ✅ LƯU VÀO DATABASE
+                if (_dbHelper != null)
+                {
+                    _ = Task.Run(async () => await _dbHelper.UpsertTransactionInfoAsync(ToGlobalTransactionInfo(info)));
+                }
 
                 Console.WriteLine($"💾 Saved: {partnerRef} | Status: {transactionStatus}");
 
-                // *** THÊM CODE NÀY ĐỂ TỰ ĐỘNG CANCEL ***
-                // Lấy agencyCode từ UI
+                // Auto cancel if needed
                 string agencyCode = "";
                 if (this.InvokeRequired)
                 {
@@ -778,7 +858,6 @@ RESPONSE: {healthResponse.StatusCode}
                     agencyCode = txtAgencyCode.Text.Trim();
                 }
 
-                // Gọi auto-cancel (không chờ để không block)
                 _ = Task.Run(async () => await AutoCancelIfNotPaid(partnerRef, partnerCode, agencyCode, transactionStatus));
             }
             catch (Exception ex)
@@ -787,8 +866,8 @@ RESPONSE: {healthResponse.StatusCode}
             }
         }
         /// <summary>
-        /// Tự động gửi lệnh cancel nếu transfer trả về không phải PAID
-        /// </summary>
+          /// Tự động gửi lệnh cancel nếu transfer trả về không phải PAID
+          /// </summary>
         private async Task AutoCancelIfNotPaid(string partnerRef, string partnerCode, string agencyCode, string transactionStatus)
         {
             ApplyAuthHeader();
@@ -919,6 +998,13 @@ RESPONSE: {healthResponse.StatusCode}
                 {
                     transaction.IsCancelled = true;
                     Console.WriteLine($"🚫 Transaction marked as CANCELLED: {partnerRef}");
+
+                    // ✅ UPDATE DATABASE
+                    if (_dbHelper != null)
+                    {
+                        _ = Task.Run(async () =>
+                            await _dbHelper.UpdateTransactionStatusAsync(partnerRef, isCancelled: true));
+                    }
                 }
             }
             catch (Exception ex)
@@ -962,7 +1048,7 @@ RESPONSE: {healthResponse.StatusCode}
             bankBranch = bankBranch.Replace(" ", "").Trim();
             if (bankBranch.Length > 8) bankBranch = bankBranch.Substring(0, 8);
 
-            string amount = rnd.Next(10, 100).ToString() + "000000.00";
+            string amount = rnd.Next(1, 10).ToString() + "000000.00";
             string fee = rnd.Next(1, 10).ToString() + "000.00";
 
             if (currencyA == "USD")
@@ -1183,9 +1269,8 @@ RESPONSE: {healthResponse.StatusCode}
             }
             else
             {
-                AppendResult($"[ERROR] ⚠️ Không có giao dịch khả dụng để cancel cho partner {partnerCode}\r\n");
-                Console.WriteLine($"⚠️ No available transactions for partner {partnerCode}");
-                return null; // Return null properly
+                AppendResult($"[ERROR] ⚡ Không có giao dịch khả dụng để hủy cho đối tác {partnerCode}\r\n");
+                return null; // Không có giao dịch khả dụng
             }
 
             var root = new Dictionary<string, object>
@@ -1278,8 +1363,7 @@ RESPONSE: {healthResponse.StatusCode}
             }
             else
             {
-                AppendResult($"[ERROR] ⚠️ Không có giao dịch khả dụng để update cho partner {partnerCode}\r\n");
-                Console.WriteLine($"⚠️ No available transactions for partner {partnerCode}");
+                AppendResult($"[ERROR] ⚡ Không có giao dịch khả dụng để cập nhật cho đối tác {partnerCode}\r\n");
                 return null;
             }
 
@@ -1485,52 +1569,62 @@ RESPONSE: {healthResponse.StatusCode}
             reportForm.Show();
         }
 
-        private void WriteApiLog(string endpoint, string status, int duration,
+        private async void WriteApiLog(string endpoint, string status, int duration,
     string responseCode, string error, string requestJson, string responseJson)
         {
             try
             {
-                string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
-                if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
+                var log = new ApiRequestLog
+                {
+                    Timestamp = DateTime.Now,
+                    Endpoint = endpoint,
+                    ResponseCode = responseCode,
+                    Status = status,
+                    Duration = duration,
+                    ErrorMessage = error,
+                    RequestJson = requestJson,
+                    ResponseJson = responseJson
+                };
 
-                string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
-
-                var sb = new StringBuilder();
-                sb.AppendLine("----------------------------------------------------");
-
-                string statusMarker = "";
+                // Parse additional info from JSON
                 string partnerRef = "";
                 string transactionRef = "";
                 string transactionStatus = "";
 
-                // ✅ XỬ LÝ CHO TRANSFER
-                // ✅ XỬ LÝ CHO TRANSFER
-                if (endpoint.ToUpper() == "TRANSFER")
+                try
                 {
-                    try
+                    if (!string.IsNullOrEmpty(responseJson))
                     {
                         using var doc = JsonDocument.Parse(responseJson);
 
-                        // Lấy API status
-                        var apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
-                            ? statusProp.GetString()
-                            : "";
-
-                        // Lấy PartnerRef từ request
+                        // Parse PartnerRef từ request
                         if (!string.IsNullOrEmpty(requestJson))
                         {
                             using var reqDoc = JsonDocument.Parse(requestJson);
                             partnerRef = reqDoc.RootElement.TryGetProperty("partnerRef", out var prProp)
-                                ? prProp.GetString()
+                                ? prProp.GetString() ?? ""
                                 : "";
+
+                            log.PartnerRef = partnerRef;
+
+                            // Parse RefNo
+                            if (reqDoc.RootElement.TryGetProperty("refNo", out var refProp))
+                                log.RefNo = refProp.GetString() ?? "";
                         }
 
-                        // Lấy TransactionRef từ response
+                        // Parse TransactionRef từ response
                         transactionRef = doc.RootElement.TryGetProperty("transactionRef", out var trProp)
-                            ? trProp.GetString()
-                            : null;
+                            ? trProp.GetString() ?? ""
+                            : "";
 
-                        // ✅ DÙNG HÀM MỚI ĐỂ XÁC ĐỊNH STATUS
+                        log.TransactionRef = transactionRef;
+
+                        // Parse API status
+                        var apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
+                            ? statusProp.GetString()
+                            : "";
+
+                        // Determine transaction status
                         transactionStatus = DetermineTransactionStatus(
                             responseCode,
                             transactionRef,
@@ -1538,123 +1632,107 @@ RESPONSE: {healthResponse.StatusCode}
                             partnerRef
                         );
 
-                        // Set status marker
-                        statusMarker = transactionStatus switch
+                        log.TransactionStatus = transactionStatus;
+                        log.IsPaid = (transactionStatus == "PAID");
+                        log.IsCancelled = (transactionStatus == "CANCELLED");
+
+                        // Parse Balance & Currency cho QUERYINFOR
+                        if (endpoint.ToUpper() == "QUERYINFOR")
                         {
-                            "PAID" => "💰 PAID",
-                            "CANCELLED" => "🚫 CANCELLED",
-                            "ERROR_99" => "❌ ERROR_99",
-                            "PENDING" => "⏳ PENDING",
-                            _ => ""
-                        };
-                    }
-                    catch { }
-                }
-
-                // ✅ XỬ LÝ CHO CANCELTRANS
-                if (endpoint.ToUpper() == "CANCELTRANS" && responseCode == "00")
-                {
-                    try
-                    {
-                        using var doc = JsonDocument.Parse(responseJson);
-
-                        string apiStatus = doc.RootElement.TryGetProperty("status", out var statusProp)
-                            ? statusProp.GetString()
-                            : "0";
-
-                        if (doc.RootElement.TryGetProperty("partnerRef", out var prProp))
-                        {
-                            partnerRef = prProp.GetString();
-                        }
-
-                        if (apiStatus == "500")
-                        {
-                            statusMarker = "🚫 CANCELLED";
-                            transactionStatus = "CANCELLED";
-
-                            // ✅ UPDATE LOG FILE - Tìm và cập nhật PENDING thành CANCELLED
-                            UpdatePendingToCancelled(logPath, partnerRef);
-                        }
-                    }
-                    catch { }
-                }
-
-                // ✅ XỬ LÝ CHO TRANSINQ
-                if (endpoint.ToUpper() == "TRANSINQ" && responseCode == "00")
-                {
-                    try
-                    {
-                        using var doc = JsonDocument.Parse(responseJson);
-
-                        if (doc.RootElement.TryGetProperty("partnerRef", out var prProp))
-                        {
-                            partnerRef = prProp.GetString();
-                        }
-
-                        if (doc.RootElement.TryGetProperty("transactionRef", out var trProp))
-                        {
-                            transactionRef = trProp.GetString();
-                        }
-
-                        // Tìm transaction status từ memory
-                        var transaction = _createdTransactions.FirstOrDefault(t => t.PartnerRef == partnerRef);
-                        if (transaction != null)
-                        {
-                            if (transaction.IsPaid)
+                            if (doc.RootElement.TryGetProperty("response", out var responseArray)
+                                && responseArray.ValueKind == JsonValueKind.Array
+                                && responseArray.GetArrayLength() > 0)
                             {
-                                statusMarker = "💰 PAID";
-                                transactionStatus = "PAID";
+                                var firstItem = responseArray[0];
+                                if (firstItem.TryGetProperty("balance", out var balanceProp))
+                                {
+                                    if (balanceProp.TryGetDecimal(out var balance))
+                                        log.Balance = balance;
+                                }
+                                if (firstItem.TryGetProperty("currency", out var currencyProp))
+                                {
+                                    log.Currency = currencyProp.GetString() ?? "";
+                                }
                             }
-                            else if (transaction.IsCancelled)
+                        }
+
+                        // Parse DebugDesc
+                        if (doc.RootElement.TryGetProperty("response", out var respObj) &&
+                            respObj.TryGetProperty("debugDesc", out var debugDescProp))
+                        {
+                            log.DebugDesc = debugDescProp.GetString() ?? "";
+                            if (!string.IsNullOrEmpty(log.DebugDesc) && string.IsNullOrEmpty(log.ErrorMessage))
                             {
-                                statusMarker = "🚫 CANCELLED";
-                                transactionStatus = "CANCELLED";
-                            }
-                            else
-                            {
-                                statusMarker = "⏳ PENDING";
-                                transactionStatus = "PENDING";
+                                log.ErrorMessage = log.DebugDesc;
                             }
                         }
                     }
-                    catch { }
                 }
+                catch { }
 
-                // ✅ HEADER LOG - Format chuẩn
-                sb.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] - {endpoint.ToUpper()} {statusMarker}");
-                sb.AppendLine($"Status: {status}");
-                sb.AppendLine($"Duration: {duration} ms");
-                sb.AppendLine($"ResponseCode: {responseCode}");
-
-                // ✅ THÔNG TIN TRANSACTION
-                if (!string.IsNullOrEmpty(partnerRef))
+                // ✅ LƯU VÀO DATABASE
+                if (_dbHelper != null)
                 {
-                    sb.AppendLine($"PartnerRef: {partnerRef}");
+                    await _dbHelper.InsertApiRequestLogAsync(log);
                 }
 
-                if (!string.IsNullOrEmpty(transactionRef))
-                {
-                    sb.AppendLine($"TransactionRef: {transactionRef}");
-                }
+                // ✅ GHI FILE LOG (backup)
+                string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+                if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
 
-                if (!string.IsNullOrEmpty(transactionStatus))
-                {
-                    sb.AppendLine($"TransactionStatus: {transactionStatus}");
-                }
+                string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
+                File.AppendAllText(logPath, BuildLogText(log), Encoding.UTF8);
 
-                if (!string.IsNullOrEmpty(error))
-                    sb.AppendLine($"Error: {error}");
-
-                sb.AppendLine("REQUEST:");
-                sb.AppendLine(string.IsNullOrWhiteSpace(requestJson) ? "No data" : requestJson);
-                sb.AppendLine("RESPONSE:");
-                sb.AppendLine(string.IsNullOrWhiteSpace(responseJson) ? "No data" : responseJson);
-                sb.AppendLine("----------------------------------------------------");
-
-                File.AppendAllText(logPath, sb.ToString(), Encoding.UTF8);
-                AppendResult(sb.ToString());
+                // ✅ HIỂN THỊ TRÊN UI
+                AppendResult(BuildLogText(log));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                AppendResult($"[LOG ERROR] ❌ {ex.Message}\r\n");
+            }
+        }
+        // Thêm hàm này vào Form3.cs
+        private string BuildLogText(ApiRequestLog log)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("----------------------------------------------------");
+
+            string statusMarker = log.TransactionStatus switch
+            {
+                "PAID" => "💰 PAID",
+                "CANCELLED" => "🚫 CANCELLED",
+                "PENDING" => "⏳ PENDING",
+                "ERROR_99" => "❌ ERROR_99",
+                _ => ""
+            };
+
+            sb.AppendLine($"[{log.Timestamp:yyyy-MM-dd HH:mm:ss}] - {log.Endpoint} {statusMarker}");
+            sb.AppendLine($"Status: {log.Status}");
+            sb.AppendLine($"Duration: {log.Duration} ms");
+            sb.AppendLine($"ResponseCode: {log.ResponseCode}");
+
+            if (!string.IsNullOrEmpty(log.PartnerRef))
+                sb.AppendLine($"PartnerRef: {log.PartnerRef}");
+
+            if (!string.IsNullOrEmpty(log.TransactionRef))
+                sb.AppendLine($"TransactionRef: {log.TransactionRef}");
+
+            if (!string.IsNullOrEmpty(log.TransactionStatus))
+                sb.AppendLine($"TransactionStatus: {log.TransactionStatus}");
+
+            if (!string.IsNullOrEmpty(log.ErrorMessage))
+                sb.AppendLine($"Error: {log.ErrorMessage}");
+
+            if (log.Balance.HasValue)
+                sb.AppendLine($"Balance: {log.Balance:N2} {log.Currency}");
+
+            sb.AppendLine("REQUEST:");
+            sb.AppendLine(log.RequestJson ?? "No data");
+            sb.AppendLine("RESPONSE:");
+            sb.AppendLine(log.ResponseJson ?? "No data");
+            sb.AppendLine("----------------------------------------------------");
+
+            return sb.ToString();
         }
         private void UpdatePendingToCancelled(string logPath, string partnerRef)
         {
@@ -1877,7 +1955,7 @@ RESPONSE: {healthResponse.StatusCode}
                 // ======================================================================
                 AppendResult("[STEP 2] 💸 Testing TRANSFER (min 5 pending, max 500)...\r\n");
                 int transferCount = 0;
-                int maxTransfers = 5000;
+                int maxTransfers = 500;
 
                 while (transferCount < maxTransfers && _isAutoTesting)
                 {
@@ -1888,7 +1966,7 @@ RESPONSE: {healthResponse.StatusCode}
                     // Kiểm tra số pending (không paid, không cancelled)
                     var pendingCount = _createdTransactions.Count(t => !t.IsPaid && !t.IsCancelled &&
                             (t.ResponseCode == "05" || t.ResponseCode == "98"));
-                    if (pendingCount >= 50)
+                    if (pendingCount >= 10)
                     {
                         // Đã đủ 5 giao dịch chưa paid, chưa cancel thì dừng
                         break;
@@ -1932,7 +2010,7 @@ RESPONSE: {healthResponse.StatusCode}
                 // ======================================================================
                 AppendResult("[STEP 4] 🚫 Testing CANCELTRANS (3 pending transactions)...\r\n");
                 int cancelCount = 0;
-                int cancelTarget = 50;
+                int cancelTarget = 10;
 
                 for (int i = 0; i < cancelTarget; i++)
                 {
@@ -2569,7 +2647,10 @@ RESPONSE: {healthResponse.StatusCode}
                         }
                     }
                 }
-                catch { /* ignore parse errors */ }
+                catch (Exception ex)
+                {
+                    AppendResult($"[API BANKS ERROR] ❌ {ex.Message}\r\n");
+                }
 
                 return list;
             }
@@ -2610,7 +2691,10 @@ RESPONSE: {healthResponse.StatusCode}
                         }
                     }
                 }
-                catch { /* ignore parse errors */ }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Không thể parse danh sách tỉnh/thành: {ex.Message}");
+                }
 
                 return list;
             }
@@ -2663,7 +2747,10 @@ RESPONSE: {healthResponse.StatusCode}
                         }
                     }
                 }
-                catch { /* ignore parse errors */ }
+                catch (Exception ex)
+                {
+                    AppendResult($"[API WARDS ERROR] ❌ {ex.Message}\r\n");
+                }
 
                 return dict;
             }
@@ -2722,6 +2809,21 @@ RESPONSE: {healthResponse.StatusCode}
             {
                 AppendResult($"[LOAD MASTER ERROR] ❌ {ex.Message}\r\n");
             }
+        }
+
+        private CreateGDAPI.TransactionInfo ToGlobalTransactionInfo(Form3.TransactionInfo local)
+        {
+            return new CreateGDAPI.TransactionInfo
+            {
+                RefNo = local.RefNo,
+                PartnerRef = local.PartnerRef,
+                PartnerCode = local.PartnerCode,
+                TransactionRef = local.TransactionRef,
+                IsPaid = local.IsPaid,
+                IsCancelled = local.IsCancelled,
+                ResponseCode = local.ResponseCode,
+                CreatedAt = local.CreatedAt
+            };
         }
     }
 };
