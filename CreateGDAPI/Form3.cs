@@ -1726,12 +1726,12 @@ RESPONSE: {healthResponse.StatusCode}
                     await _dbHelper.InsertApiRequestLogAsync(log);
                 }
 
-                // ✅ GHI FILE LOG (backup)
-                string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
-                if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
+                //// ✅ GHI FILE LOG (backup)
+                //string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "re");
+                //if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
 
-                string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
-                File.AppendAllText(logPath, BuildLogText(log), Encoding.UTF8);
+                //string logPath = Path.Combine(logDir, $"logs_all_apis_{DateTime.Now:yyyyMMdd}.txt");
+                //File.AppendAllText(logPath, BuildLogText(log), Encoding.UTF8);
 
                 // ✅ HIỂN THỊ TRÊN UI
                 AppendResult(BuildLogText(log));
