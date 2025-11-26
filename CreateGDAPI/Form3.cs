@@ -8,6 +8,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -718,7 +719,7 @@ RESPONSE: {healthResponse.StatusCode}
                 string formattedResponse = FormatJsonForLog(result);
 
                 // New classification: fail when responseCode is "99" or empty/whitespace; otherwise success
-                string status = (string.IsNullOrWhiteSpace(responseCode) || responseCode == "99") ? "FAILED" : "SUCCESS";
+                string status = (string.IsNullOrWhiteSpace(responseCode)|| responseCode == "(parse error)" || responseCode == "99") ? "FAILED" : "SUCCESS";
 
                 int durationMs = (int)elapsed.TotalMilliseconds;
                 WriteApiLog(endpoint, status, durationMs, responseCode, null, formattedRequest, formattedResponse);
@@ -1064,8 +1065,8 @@ RESPONSE: {healthResponse.StatusCode}
             }
             string refNo = Guid.NewGuid().ToString();
             //string refNo = Guid.NewGuid().ToString();
-            string partnerRef = agencyCode + GenerateRandomNumber(12);
-            string pin = agencyCode + GenerateRandomNumber(6);
+            string partnerRef = agencyCode + GenerateRandomString(12);
+            string pin = agencyCode + GenerateRandomString(6);
 
             string senderName = GenerateRandomName();
             string receiverName = GenerateRandomName();
@@ -1349,12 +1350,12 @@ RESPONSE: {healthResponse.StatusCode}
             {
                 var trans = _createdTransactions[rnd.Next(_createdTransactions.Count)];
                 partnerRef = trans.PartnerRef;
-                pin = GenerateRandomNumber(6);
+                pin = GenerateRandomString(6);
             }
             else
             {
-                partnerRef = GenerateRandomNumber(6);
-                pin = GenerateRandomNumber(6);
+                partnerRef = GenerateRandomString(6);
+                pin = GenerateRandomString(6);
             }
 
             var root = new Dictionary<string, object>
@@ -1388,7 +1389,7 @@ RESPONSE: {healthResponse.StatusCode}
             {
                 var trans = availableTransactions[rnd.Next(availableTransactions.Count)];
                 partnerRef = trans.PartnerRef;
-                pin = "PIN-" + agencyCode + GenerateRandomNumber(6);
+                pin = "PIN-" + agencyCode + GenerateRandomString(6);
 
                 Console.WriteLine($"📤 Update request for available transaction: {partnerRef}");
             }
@@ -1474,7 +1475,25 @@ RESPONSE: {healthResponse.StatusCode}
             for (int i = 0; i < length; i++) sb.Append(rnd.Next(0, 10));
             return sb.ToString();
         }
+        private string GenerateRandomString(int length)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            var result = new StringBuilder(length);
 
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                byte[] buffer = new byte[sizeof(uint)];
+
+                for (int i = 0; i < length; i++)
+                {
+                    rng.GetBytes(buffer);
+                    uint num = BitConverter.ToUInt32(buffer, 0);
+                    result.Append(chars[(int)(num % (uint)chars.Length)]);
+                }
+            }
+
+            return result.ToString();
+        }
         private string RandomDate(int startYear, int endYear)
         {
             DateTime start = new DateTime(startYear, 1, 1);
@@ -2264,7 +2283,7 @@ RESPONSE: {healthResponse.StatusCode}
                 ["refNo"] = Guid.NewGuid().ToString(),
                 ["partnerCode"] = partnerCode,
                 ["partnerRef"] = partnerRef,
-                ["pin"] = "PIN-" + GenerateRandomNumber(6)
+                ["pin"] = "PIN-" + GenerateRandomString(6)
             };
 
             return JsonSerializer.Serialize(root, new JsonSerializerOptions
