@@ -1007,7 +1007,7 @@ RESPONSE: {healthResponse.StatusCode}
 
                 // Write to log
                 WriteApiLog("CANCELTRANS",
-                    responseCode == "00" ? "OK" : "ERROR",
+                    responseCode == "00" ? "SUCCESS" : "FAILED",
                     (int)elapsed.TotalMilliseconds,
                     responseCode,
                     "",
